@@ -20,7 +20,9 @@ public class RegisterRequest
     /// </summary>
     [Required(ErrorMessage = "Email is required.")]
     [EmailAddress(ErrorMessage = "Please provide a valid email address.")]
-    [StringLength(256)]
+    [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        ErrorMessage = "Email must be in the format name@example.com.")]
+    [StringLength(256, ErrorMessage = "Email must not exceed 256 characters.")]
     public string Email { get; set; } = string.Empty;
 
     /// <summary>

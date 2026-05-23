@@ -1,7 +1,21 @@
 ﻿@page "/"
 
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
 <PageTitle>Home</PageTitle>
 
 <h1>Hello, world!</h1>
 
 Welcome to your new app.
+
+<div class="mt-3">
+    <button type="button" class="btn btn-secondary" @onclick="GoToLogin">Back to login</button>
+</div>
+
+@code {
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo("/login");
+    }
+}

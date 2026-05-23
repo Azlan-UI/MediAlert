@@ -1,0 +1,97 @@
+@page "/login"
+@rendermode InteractiveServer
+@using System.Net
+@using MediAlert.DTOs.Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Login</PageTitle>
+
+<section class="login-shell">
+    <div class="login-panel">
+        <div class="login-header">
+            <p class="eyebrow">MediAlert</p>
+            <h1>Sign in</h1>
+        </div>
+
+        <EditForm Model="loginModel" OnValidSubmit="HandleLoginAsync" class="login-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="email">Email</label>
+                <InputText id="email" class="form-control" @bind-Value="loginModel.Email" autocomplete="username" />
+                <ValidationMessage For="() => loginModel.Email" />
+            </div>
+
+            <div class="field-group">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" autocomplete="current-password" />
+                <ValidationMessage For="() => loginModel.Password" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="login-error" role="alert">@errorMessage</div>
+            }
+
+            <button type="submit" class="btn btn-primary login-button" disabled="@isSubmitting">
+                @(isSubmitting ? "Signing in..." : "Sign in")
+            </button>
+        </EditForm>
+    </div>
+</section>
+
+@code {
+    private readonly LoginRequest loginModel = new();
+
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task HandleLoginAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri(Navigation.BaseUri)
+            };
+
+            var response = await http.PostAsJsonAsync("api/auth/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+                if (auth is null || string.IsNullOrWhiteSpace(auth.Token))
+                {
+                    errorMessage = "Login succeeded, but no token was returned.";
+                    return;
+                }
+
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+            errorMessage = error?.Message ?? GetDefaultError(response.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Could not reach the login API.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private static string GetDefaultError(HttpStatusCode statusCode) =>
+        statusCode switch
+        {
+            HttpStatusCode.Unauthorized => "Invalid email or password.",
+            HttpStatusCode.Forbidden => "This account cannot sign in.",
+            _ => "Login failed."
+        };
+}
