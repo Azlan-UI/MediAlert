@@ -1,0 +1,284 @@
+@page "/patient/medicines"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Patient Medicines</PageTitle>
+
+<section class="medicine-page">
+    <div class="medicine-panel">
+        <div class="medicine-header">
+            <p class="eyebrow">Patient medicines</p>
+            <h1>Add medicine</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <EditForm Model="medicineForm" OnValidSubmit="AddMedicineAsync" class="medicine-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="medicineName">Medicine name</label>
+                <InputText id="medicineName" class="form-control" @bind-Value="medicineForm.Name" />
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="dosage">Dosage</label>
+                    <InputText id="dosage" class="form-control" @bind-Value="medicineForm.Dosage" />
+                </div>
+
+                <div class="field-group">
+                    <label for="dosageForm">Form</label>
+                    <InputText id="dosageForm" class="form-control" @bind-Value="medicineForm.DosageForm" />
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="frequency">Frequency per day</label>
+                    <InputNumber id="frequency" class="form-control" @bind-Value="medicineForm.FrequencyPerDay" />
+                </div>
+
+                <div class="field-group">
+                    <label for="doseTime">First dose time</label>
+                    <InputText id="doseTime" type="time" class="form-control" @bind-Value="medicineForm.DoseTime" />
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="startDate">Start date</label>
+                    <InputDate id="startDate" class="form-control" @bind-Value="medicineForm.StartDate" />
+                </div>
+
+                <div class="field-group">
+                    <label for="endDate">End date optional</label>
+                    <InputDate id="endDate" class="form-control" @bind-Value="medicineForm.EndDate" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary medicine-button" disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Save medicine")
+            </button>
+        </EditForm>
+
+        <div class="test-navigation">
+            <button type="button" class="btn btn-secondary" @onclick="GoToComplianceTest">
+                Continue to compliance report
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="() => LoadMedicinesAsync()" disabled="@isLoading">
+                @(isLoading ? "Loading..." : "Refresh medicines")
+            </button>
+        </div>
+
+        <div class="medicine-list">
+            <h2>Saved medicines</h2>
+
+            @if (isLoading)
+            {
+                <p>Loading saved medicines...</p>
+            }
+            else if (medicineList?.Medicines.Count > 0)
+            {
+                @foreach (var medicine in medicineList.Medicines)
+                {
+                    <div class="medicine-item">
+                        <div>
+                            <strong>@medicine.DrugName</strong>
+                            <span>@medicine.DosageStrength - @medicine.DosageForm - @medicine.FrequencyPerDay time(s) daily</span>
+                        </div>
+
+                        <div class="dose-list">
+                            @foreach (var schedule in medicine.DoseSchedules)
+                            {
+                                <span>@schedule.ScheduledTime.ToString("HH:mm")</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p>No saved medicines yet.</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly MedicineForm medicineForm = new()
+    {
+        FrequencyPerDay = 1,
+        DosageForm = "Tablet",
+        DoseTime = "09:00",
+        StartDate = DateTime.Today
+    };
+
+    private PatientMedicationListResponse? medicineList;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isSaving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadMedicinesAsync();
+        StateHasChanged();
+    }
+
+    private async Task AddMedicineAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            var request = new AddPatientMedicationRequest
+            {
+                DrugName = medicineForm.Name,
+                DosageStrength = medicineForm.Dosage,
+                DosageForm = medicineForm.DosageForm,
+                FrequencyPerDay = medicineForm.FrequencyPerDay,
+                ScheduledTime = medicineForm.DoseTime,
+                StartDate = DateOnly.FromDateTime(medicineForm.StartDate),
+                EndDate = medicineForm.EndDate is null ? null : DateOnly.FromDateTime(medicineForm.EndDate.Value)
+            };
+
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/patient/medicines", request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Medicine saved. It will appear again the next time this patient logs in.";
+            ResetForm();
+            await LoadMedicinesAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task LoadMedicinesAsync(bool showLoading = true)
+    {
+        if (showLoading)
+        {
+            isLoading = true;
+        }
+
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                ShowError("No patient token found. Please log in again.");
+                return;
+            }
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/patient/medicines");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            medicineList = await response.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri(Navigation.BaseUri)
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        var error = await response.Content.ReadFromJsonAsync<PatientMedicationErrorResponse>(JsonOptions);
+        ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private void ResetForm()
+    {
+        medicineForm.Name = string.Empty;
+        medicineForm.Dosage = string.Empty;
+        medicineForm.DosageForm = "Tablet";
+        medicineForm.FrequencyPerDay = 1;
+        medicineForm.DoseTime = "09:00";
+        medicineForm.StartDate = DateTime.Today;
+        medicineForm.EndDate = null;
+    }
+
+    private void GoToComplianceTest()
+    {
+        Navigation.NavigateTo("/patient/compliance-test");
+    }
+
+    private sealed class MedicineForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Dosage { get; set; } = string.Empty;
+        public string DosageForm { get; set; } = string.Empty;
+        public int FrequencyPerDay { get; set; }
+        public string DoseTime { get; set; } = string.Empty;
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}
