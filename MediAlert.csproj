@@ -7,6 +7,7 @@
     <RootNamespace>MediAlert</RootNamespace>
     <!-- Treat warnings as errors in production builds for code quality -->
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <UserSecretsId>2f0f5d19-b40d-4ed2-9cc1-4c434ee7c59b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
