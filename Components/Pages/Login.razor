@@ -1,6 +1,7 @@
 @page "/login"
 @rendermode InteractiveServer
 @using System.Net
+@using MediAlert.Constants
 @using MediAlert.DTOs.Auth
 @inject NavigationManager Navigation
 
@@ -70,7 +71,7 @@
                     return;
                 }
 
-                Navigation.NavigateTo("/");
+                NavigateAfterLogin(auth);
                 return;
             }
 
@@ -94,4 +95,15 @@
             HttpStatusCode.Forbidden => "This account cannot sign in.",
             _ => "Login failed."
         };
+
+    private void NavigateAfterLogin(AuthResponse auth)
+    {
+        if (string.Equals(auth.Role, UserRoles.Patient, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/patient/medicines");
+            return;
+        }
+
+        Navigation.NavigateTo("/");
+    }
 }

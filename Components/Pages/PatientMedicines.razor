@@ -1,0 +1,108 @@
+@page "/patient/medicines"
+@rendermode InteractiveServer
+
+<PageTitle>Patient Medicines</PageTitle>
+
+<section class="medicine-page">
+    <div class="medicine-panel">
+        <div class="medicine-header">
+            <p class="eyebrow">Patient medicines</p>
+            <h1>Add medicine</h1>
+        </div>
+
+        <EditForm Model="medicineForm" OnValidSubmit="AddMedicine" class="medicine-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="medicineName">Medicine name</label>
+                <InputText id="medicineName" class="form-control" @bind-Value="medicineForm.Name" />
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="dosage">Dosage</label>
+                    <InputText id="dosage" class="form-control" @bind-Value="medicineForm.Dosage" />
+                </div>
+
+                <div class="field-group">
+                    <label for="frequency">Frequency per day</label>
+                    <InputNumber id="frequency" class="form-control" @bind-Value="medicineForm.FrequencyPerDay" />
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="doseTime">Dose time</label>
+                    <InputText id="doseTime" type="time" class="form-control" @bind-Value="medicineForm.DoseTime" />
+                </div>
+
+                <div class="field-group">
+                    <label for="startDate">Start date</label>
+                    <InputDate id="startDate" class="form-control" @bind-Value="medicineForm.StartDate" />
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label for="notes">Notes</label>
+                <InputTextArea id="notes" class="form-control" @bind-Value="medicineForm.Notes" />
+            </div>
+
+            <button type="submit" class="btn btn-primary medicine-button">Add medicine</button>
+        </EditForm>
+
+        @if (savedMedicines.Count > 0)
+        {
+            <div class="medicine-list">
+                <h2>Added medicines</h2>
+
+                @foreach (var medicine in savedMedicines)
+                {
+                    <div class="medicine-item">
+                        <strong>@medicine.Name</strong>
+                        <span>@medicine.Dosage - @medicine.FrequencyPerDay time(s) daily - @medicine.DoseTime</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private readonly MedicineForm medicineForm = new()
+    {
+        FrequencyPerDay = 1,
+        StartDate = DateTime.Today
+    };
+
+    private readonly List<MedicineForm> savedMedicines = [];
+
+    private void AddMedicine()
+    {
+        savedMedicines.Add(new MedicineForm
+        {
+            Name = medicineForm.Name,
+            Dosage = medicineForm.Dosage,
+            FrequencyPerDay = medicineForm.FrequencyPerDay,
+            DoseTime = medicineForm.DoseTime,
+            StartDate = medicineForm.StartDate,
+            Notes = medicineForm.Notes
+        });
+
+        medicineForm.Name = string.Empty;
+        medicineForm.Dosage = string.Empty;
+        medicineForm.FrequencyPerDay = 1;
+        medicineForm.DoseTime = string.Empty;
+        medicineForm.StartDate = DateTime.Today;
+        medicineForm.Notes = string.Empty;
+    }
+
+    private sealed class MedicineForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Dosage { get; set; } = string.Empty;
+        public int FrequencyPerDay { get; set; }
+        public string DoseTime { get; set; } = string.Empty;
+        public DateTime StartDate { get; set; }
+        public string Notes { get; set; } = string.Empty;
+    }
+}
