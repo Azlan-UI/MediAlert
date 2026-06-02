@@ -1,4 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+@using Microsoft.AspNetCore.Components.Authorization
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">MediAlert</a>
     </div>
@@ -15,16 +17,157 @@
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            <NavLink class="nav-link" href="login">
+                <span class="bi bi-person-badge-fill-nav-menu" aria-hidden="true"></span> Login
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
+        <AuthorizeView Roles="Patient">
+            <Authorized>
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    Central Hub
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/dashboard">
+                        <span class="bi bi-speedometer2-nav-menu" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    My Health
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/medicines">
+                        <span class="bi bi-capsule-nav-menu" aria-hidden="true"></span> Medications
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/compliance-test">
+                        <span class="bi bi-journal-medical-nav-menu" aria-hidden="true"></span> Intake Logs
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    Safety
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/interaction-checker">
+                        <span class="bi bi-shield-check-nav-menu" aria-hidden="true"></span> Interaction Checker
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    Care Network
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/caregivers">
+                        <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> Caregivers
+                    </NavLink>
+                </div>
+                <AuthorizeView Policy="@MediAlert.Constants.AuthorizationPolicies.PremiumPatient">
+                    <Authorized Context="premiumCareNetwork">
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="doctors">
+                                <span class="bi bi-heart-pulse-fill-nav-menu" aria-hidden="true"></span> Doctors
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="consultations">
+                                <span class="bi bi-camera-video-fill-nav-menu" aria-hidden="true"></span> Consultations
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    Calendar
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="patient/calendar">
+                        <span class="bi bi-calendar-event-fill-nav-menu" aria-hidden="true"></span> Unified Calendar
+                    </NavLink>
+                </div>
+                <AuthorizeView Policy="@MediAlert.Constants.AuthorizationPolicies.PremiumPatient">
+                    <Authorized Context="premiumCalendar">
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="appointments/calendar">
+                                <span class="bi bi-calendar-plus-nav-menu" aria-hidden="true"></span> Appointments
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-3">
+                            <NavLink class="nav-link" href="appointments/refills">
+                                <span class="bi bi-prescription2-nav-menu" aria-hidden="true"></span> Refill Reminders
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="nav-item px-3 font-weight-bold text-uppercase mt-3 mb-1" style="font-size: 0.75rem; color: #adb5bd;">
+                    Analytics & Premium
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reports/dashboard">
+                        <span class="bi bi-graph-up-nav-menu" aria-hidden="true"></span> Reports
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="reports/pdf">
+                        <span class="bi bi-file-earmark-pdf-nav-menu" aria-hidden="true"></span> Export PDF
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="billing/dashboard">
+                        <span class="bi bi-star-fill-nav-menu text-warning" aria-hidden="true"></span> Subscription
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="billing/upgrade">
+                        <span class="bi bi-arrow-up-circle-nav-menu text-warning" aria-hidden="true"></span> Upgrade Tier
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="billing/history">
+                        <span class="bi bi-receipt-nav-menu" aria-hidden="true"></span> Billing History
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Caregiver">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="caregiver/dashboard">
+                        <span class="bi bi-people-fill-nav-menu" aria-hidden="true"></span> My Patients
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3 mt-4">
+                    <button class="nav-link btn btn-link" @onclick="HandleLogout">
+                        <span class="bi bi-box-arrow-right-nav-menu" aria-hidden="true"></span> Logout
+                    </button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
     </nav>
 </div>
 
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task HandleLogout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_token");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_user_id");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_role");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_full_name");
+        
+        ((MediAlert.Providers.JwtAuthenticationStateProvider)AuthStateProvider).NotifyUserLogout();
+        Navigation.NavigateTo("/login");
+    }
+}
