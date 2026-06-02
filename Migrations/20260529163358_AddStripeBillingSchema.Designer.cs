@@ -3,6 +3,7 @@ using System;
 using MediAlert.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MediAlert.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260529163358_AddStripeBillingSchema")]
+    partial class AddStripeBillingSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -560,33 +563,12 @@ namespace MediAlert.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric");
 
-                    b.Property<int>("AttemptCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("NOW()");
 
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
-
                     b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("HostedInvoiceUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("InvoicePdfUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTime?>("NextPaymentAttempt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime?>("PaidDate")
@@ -597,21 +579,10 @@ namespace MediAlert.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<string>("StripeInvoiceId")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
                     b.Property<Guid>("SubscriptionId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("InvoiceId");
-
-                    b.HasIndex("StripeInvoiceId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Invoices_StripeInvoiceId");
 
                     b.HasIndex("SubscriptionId")
                         .HasDatabaseName("IX_Invoices_SubscriptionId");
@@ -787,14 +758,6 @@ namespace MediAlert.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("CancelAtPeriodEnd")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -811,14 +774,6 @@ namespace MediAlert.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<string>("StripeCustomerId")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<string>("StripePriceId")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
                     b.Property<string>("StripeSubscriptionId")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
@@ -828,20 +783,10 @@ namespace MediAlert.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("SubscriptionId");
 
                     b.HasIndex("PatientId")
                         .HasDatabaseName("IX_Subscriptions_PatientId");
-
-                    b.HasIndex("StripeCustomerId")
-                        .HasDatabaseName("IX_Subscriptions_StripeCustomerId");
-
-                    b.HasIndex("StripeSubscriptionId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Subscriptions_StripeSubscriptionId");
 
                     b.ToTable("Subscriptions");
                 });
