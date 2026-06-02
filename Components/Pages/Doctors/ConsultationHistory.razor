@@ -1,0 +1,179 @@
+@page "/consultations"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>My Consultations</PageTitle>
+
+<section class="consultations-page">
+    <div class="page-header">
+        <h1>My Consultations</h1>
+        <p>View your upcoming and past appointments.</p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="status-box status-error">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading consultations...</p>
+        </div>
+    }
+    else if (appointments == null || !appointments.Any())
+    {
+        <div class="empty-state">
+            <p>You have no consultations yet.</p>
+            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/doctors")'>Find a Doctor</button>
+        </div>
+    }
+    else
+    {
+        <div class="tabs">
+            <button class="tab @(activeTab == "upcoming" ? "active" : "")" @onclick='() => activeTab = "upcoming"'>Upcoming</button>
+            <button class="tab @(activeTab == "past" ? "active" : "")" @onclick='() => activeTab = "past"'>Past</button>
+        </div>
+
+        <div class="consultation-list">
+            @foreach (var appt in filteredAppointments)
+            {
+                <div class="consultation-card">
+                    <div class="cons-date">
+                        <div class="cons-day">@appt.ScheduledDateTime.ToString("dd")</div>
+                        <div class="cons-month">@appt.ScheduledDateTime.ToString("MMM")</div>
+                    </div>
+                    <div class="cons-details">
+                        <h3>@appt.AppointmentType</h3>
+                        <p class="cons-time">@appt.ScheduledDateTime.ToString("hh:mm tt")</p>
+                        @if (!string.IsNullOrWhiteSpace(appt.Location))
+                        {
+                            <p class="cons-location">@appt.Location</p>
+                        }
+                        <span class="status-badge status-@appt.Status.ToLower()">@appt.Status</span>
+                    </div>
+                    <div class="cons-actions">
+                        @if (appt.Status.Equals("Scheduled", StringComparison.OrdinalIgnoreCase))
+                        {
+                            @if (!string.IsNullOrWhiteSpace(appt.Location))
+                            {
+                                <a class="btn btn-primary" href="@appt.Location" target="_blank">Join Call</a>
+                            }
+                            <button class="btn btn-outline" @onclick="() => CancelAppointmentAsync(appt.AppointmentId)"
+                                    disabled="@(cancellingId == appt.AppointmentId)">
+                                @(cancellingId == appt.AppointmentId ? "Cancelling…" : "Cancel")
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-outline" disabled>@appt.Status</button>
+                        }
+                    </div>
+                </div>
+            }
+            @if (!filteredAppointments.Any())
+            {
+                <div class="empty-state-small">No @activeTab appointments found.</div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private bool isLoading = true;
+    private string? token;
+    private string? errorMessage;
+    private Guid? cancellingId;
+    private List<AppointmentSummaryResponse>? appointments;
+    private string activeTab = "upcoming";
+
+    private IEnumerable<AppointmentSummaryResponse> filteredAppointments =>
+        activeTab == "upcoming"
+            ? appointments?.Where(a => a.ScheduledDateTime >= DateTime.Now || a.Status.Equals("Scheduled", StringComparison.OrdinalIgnoreCase)) ?? []
+            : appointments?.Where(a => a.ScheduledDateTime < DateTime.Now && !a.Status.Equals("Scheduled", StringComparison.OrdinalIgnoreCase)) ?? [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadAppointmentsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAppointmentsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Appointments");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage = $"Failed to load appointments ({(int)response.StatusCode}).";
+                return;
+            }
+
+            appointments = await response.Content.ReadFromJsonAsync<List<AppointmentSummaryResponse>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error loading appointments: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CancelAppointmentAsync(Guid appointmentId)
+    {
+        cancellingId = appointmentId;
+        errorMessage = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Appointments/{appointmentId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var item = appointments?.FirstOrDefault(a => a.AppointmentId == appointmentId);
+                if (item != null) item.Status = "Cancelled";
+            }
+            else
+            {
+                var error = await response.Content.ReadFromJsonAsync<AppointmentsErrorResponse>(JsonOptions);
+                errorMessage = error?.Message ?? $"Cancel failed ({(int)response.StatusCode}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error cancelling appointment: " + ex.Message;
+        }
+        finally
+        {
+            cancellingId = null;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return http;
+    }
+}

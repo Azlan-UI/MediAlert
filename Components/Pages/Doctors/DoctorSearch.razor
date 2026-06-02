@@ -1,0 +1,165 @@
+@page "/doctors"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Doctors
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Find a Doctor</PageTitle>
+
+<section class="doctors-page">
+    <div class="header-banner">
+        <h1>Find a Specialist</h1>
+        <p>Book video consultations with verified medical professionals.</p>
+    </div>
+
+    <div class="search-container">
+        <div class="search-bar">
+            <input type="text" class="form-control search-input" placeholder="Search by specialization (e.g., Cardiology)" @bind="searchSpecialization" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn btn-primary" @onclick="SearchDoctorsAsync" disabled="@isLoading">
+                @(isLoading ? "Searching..." : "Search")
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-error">@errorMessage</div>
+    }
+
+    @if (doctors == null)
+    {
+        if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading doctors...</p>
+            </div>
+        }
+    }
+    else if (!doctors.Any())
+    {
+        <div class="empty-state">
+            <p>No doctors found matching your criteria.</p>
+        </div>
+    }
+    else
+    {
+        <div class="doctors-grid">
+            @foreach (var doc in doctors)
+            {
+                <div class="doctor-card">
+                    <div class="doctor-header">
+                        <div class="doctor-avatar">
+                            @doc.FullName.Substring(0, 1)
+                        </div>
+                        <div class="doctor-title-info">
+                            <h3>Dr. @doc.FullName</h3>
+                            <span class="specialization">@doc.Specialization</span>
+                        </div>
+                        @if (doc.IsVerified)
+                        {
+                            <div class="verified-badge" title="Verified Professional">✓</div>
+                        }
+                    </div>
+                    
+                    <div class="doctor-stats">
+                        <div class="stat">
+                            <span class="stat-value">@doc.ExperienceYears+</span>
+                            <span class="stat-label">Years Exp.</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">@(doc.RatingAverage?.ToString("0.0") ?? "N/A")</span>
+                            <span class="stat-label">Rating</span>
+                        </div>
+                    </div>
+
+                    <div class="doctor-actions">
+                        <button class="btn btn-outline" @onclick="() => ViewProfile(doc.DoctorId)">View Profile</button>
+                        <button class="btn btn-primary" @onclick="() => BookConsultation(doc.DoctorId)">Book Consult</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private string searchSpecialization = string.Empty;
+    private bool isLoading = false;
+    private string? errorMessage;
+    private List<DoctorSummaryResponse>? doctors;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SearchDoctorsAsync();
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchDoctorsAsync();
+        }
+    }
+
+    private async Task SearchDoctorsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            if (string.IsNullOrEmpty(token))
+            {
+                errorMessage = "Authentication token missing. Please log in.";
+                return;
+            }
+
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var url = "/api/v1/Doctors/search";
+            if (!string.IsNullOrWhiteSpace(searchSpecialization))
+            {
+                url += $"?specialization={Uri.EscapeDataString(searchSpecialization)}";
+            }
+
+            var response = await httpClient.GetAsync(url);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                doctors = JsonSerializer.Deserialize<List<DoctorSummaryResponse>>(content, options);
+            }
+            else
+            {
+                errorMessage = "Failed to fetch doctors. Please try again later.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "An error occurred while fetching doctors.";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ViewProfile(Guid doctorId)
+    {
+        Navigation.NavigateTo($"/doctors/{doctorId}");
+    }
+
+    private void BookConsultation(Guid doctorId)
+    {
+        Navigation.NavigateTo($"/doctors/{doctorId}/book");
+    }
+}
