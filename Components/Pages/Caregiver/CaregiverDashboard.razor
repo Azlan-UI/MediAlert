@@ -1,0 +1,302 @@
+@page "/caregiver/dashboard"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Caregiver
+@using MediAlert.Constants
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Caregiver Dashboard</PageTitle>
+
+<section class="caregiver-page">
+    <div class="caregiver-panel">
+        <div class="caregiver-header">
+            <p class="eyebrow">Caregiver View</p>
+            <h1>Your Linked Patients</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="links-list">
+            @if (isLoading)
+            {
+                <p>Loading patients...</p>
+            }
+            else if (links.Count > 0)
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Patient Name</th>
+                            <th>Status</th>
+                            <th>Permission</th>
+                            <th>Requested At</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var link in links)
+                        {
+                            <tr>
+                                <td>@link.PatientFullName</td>
+                                <td><span class="badge @GetStatusClass(link.Status)">@link.Status</span></td>
+                                <td>@link.PermissionLevel</td>
+                                <td>@link.RequestedAt.ToString("g")</td>
+                                <td>
+                                    @if (link.Status == LinkStatuses.Pending)
+                                    {
+                                        <button class="btn btn-sm btn-primary mr-2" @onclick="() => ApproveLinkAsync(link.LinkId)">Approve</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RejectLinkAsync(link.LinkId)">Reject</button>
+                                    }
+                                    else if (link.Status == LinkStatuses.Approved)
+                                    {
+                                        <button class="btn btn-sm btn-secondary mr-2" @onclick="() => ViewPatientDashboard(link.PatientId)">View Dashboard</button>
+                                        <button class="btn btn-sm btn-danger" @onclick="() => RevokeLinkAsync(link.LinkId)">Revoke</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p>You have no patient link requests or active patients.</p>
+            }
+        </div>
+
+        @if (selectedPatientId.HasValue && dashboardData != null)
+        {
+            <div class="patient-dashboard">
+                <h2>Dashboard for @dashboardData.PatientFullName</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <h3>Compliance Overview</h3>
+                        <p class="big-number">@dashboardData.ComplianceOverview.OverallCompliancePercentage%</p>
+                        <p>Overall Compliance</p>
+                    </div>
+
+                    <div class="dashboard-card alerts-card">
+                        <h3>Missed Dose Alerts (@dashboardData.MissedDoseAlerts.Count)</h3>
+                        @if (dashboardData.MissedDoseAlerts.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var alert in dashboardData.MissedDoseAlerts)
+                                {
+                                    <li>@alert.MedicationName at @alert.ScheduledTime.ToString("t")</li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p>No missed doses recently.</p>
+                        }
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>Upcoming Doses</h3>
+                        @if (dashboardData.UpcomingDoses.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var dose in dashboardData.UpcomingDoses)
+                                {
+                                    <li>@dose.MedicationName at @dose.ScheduledTime.ToString("t")</li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p>No upcoming doses today.</p>
+                        }
+                    </div>
+                </div>
+                <button class="btn btn-secondary mt-3" @onclick="CloseDashboard">Close Dashboard</button>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private List<CaregiverPatientLinkResponse> links = [];
+    private CaregiverMonitoringDashboardResponse? dashboardData;
+    private Guid? selectedPatientId;
+    
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadLinksAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadLinksAsync(bool showLoading = true)
+    {
+        if (showLoading) isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token)) return;
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Caregiver/links/caregiver");
+
+            if (!response.IsSuccessStatusCode) return;
+
+            links = await response.Content.ReadFromJsonAsync<List<CaregiverPatientLinkResponse>>(JsonOptions) ?? [];
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApproveLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsync($"api/v1/Caregiver/links/{linkId}/approve", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Link approved successfully.";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task RejectLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var rejectRequest = new RejectCaregiverPatientLinkRequest { Reason = "Rejected by caregiver." };
+            var response = await http.PostAsJsonAsync($"api/v1/Caregiver/links/{linkId}/reject", rejectRequest);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Link rejected.";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task RevokeLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Caregiver/links/{linkId}/revoke");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Caregiver link revoked.";
+            if (selectedPatientId.HasValue) CloseDashboard();
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task ViewPatientDashboard(Guid patientId)
+    {
+        selectedPatientId = patientId;
+        dashboardData = null;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync($"api/v1/Caregiver/patients/{patientId}/dashboard");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            dashboardData = await response.Content.ReadFromJsonAsync<CaregiverMonitoringDashboardResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+    
+    private void CloseDashboard()
+    {
+        selectedPatientId = null;
+        dashboardData = null;
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        var error = await response.Content.ReadFromJsonAsync<CaregiverErrorResponse>(JsonOptions);
+        ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        LinkStatuses.Pending => "badge-warning",
+        LinkStatuses.Approved => "badge-success",
+        LinkStatuses.Rejected or LinkStatuses.Revoked => "badge-danger",
+        _ => "badge-secondary"
+    };
+}
