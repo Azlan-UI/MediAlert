@@ -1,0 +1,252 @@
+@page "/appointments/manager"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Appointment Manager</PageTitle>
+
+<section class="appointments-page">
+    <div class="appointments-panel">
+        <div class="appointments-header">
+            <h1>Manage Appointments</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="add-appointment-section">
+            <h2>Book New Appointment</h2>
+            <EditForm Model="requestModel" OnValidSubmit="BookAppointmentAsync" class="appointments-form">
+                <DataAnnotationsValidator />
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="appointmentType">Appointment Type</label>
+                        <InputText id="appointmentType" class="form-control" @bind-Value="requestModel.AppointmentType" />
+                    </div>
+
+                    <div class="field-group">
+                        <label for="location">Location / URL</label>
+                        <InputText id="location" class="form-control" @bind-Value="requestModel.Location" />
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="scheduledDateTime">Date & Time</label>
+                        <InputDate Type="InputDateType.DateTimeLocal" id="scheduledDateTime" class="form-control" @bind-Value="requestModel.ScheduledDateTime" />
+                    </div>
+
+                    <div class="field-group">
+                        <label for="duration">Duration (mins)</label>
+                        <InputNumber id="duration" class="form-control" @bind-Value="requestModel.DurationMinutes" />
+                    </div>
+                </div>
+                
+                <div class="field-group">
+                    <label for="notes">Notes</label>
+                    <InputTextArea id="notes" class="form-control" @bind-Value="requestModel.Notes" rows="3" />
+                </div>
+
+                <button type="submit" class="btn btn-primary appointments-button" disabled="@isSaving">
+                    @(isSaving ? "Booking..." : "Book Appointment")
+                </button>
+            </EditForm>
+        </div>
+
+        <div class="list-section">
+            <h2>Your Appointments</h2>
+            
+            @if (isLoading)
+            {
+                <div class="loading-state">
+                    <p>Loading appointments...</p>
+                </div>
+            }
+            else if (appointments == null || !appointments.Any())
+            {
+                <div class="empty-state">
+                    <p>You have no appointments yet.</p>
+                </div>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Type</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var appt in appointments.OrderBy(a => a.ScheduledDateTime))
+                        {
+                            <tr>
+                                <td>@appt.ScheduledDateTime.ToString("f")</td>
+                                <td>@appt.AppointmentType</td>
+                                <td>@appt.Location</td>
+                                <td><span class="badge badge-success">@appt.Status</span></td>
+                                <td>
+                                    @if (appt.Status.Equals("Scheduled", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => CancelAppointmentAsync(appt.AppointmentId)" disabled="@(isCancellingId == appt.AppointmentId)">
+                                            @(isCancellingId == appt.AppointmentId ? "Cancelling..." : "Cancel")
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly CreateAppointmentRequest requestModel = new() {
+        ScheduledDateTime = DateTime.Now.AddDays(1).AddHours(1),
+        DurationMinutes = 30,
+        AppointmentType = "General Checkup"
+    };
+
+    private List<AppointmentSummaryResponse>? appointments;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isSaving;
+    private bool isLoading = true;
+    private Guid? isCancellingId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadAppointmentsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAppointmentsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Appointments");
+            if (response.IsSuccessStatusCode)
+            {
+                appointments = await response.Content.ReadFromJsonAsync<List<AppointmentSummaryResponse>>(JsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task BookAppointmentAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/v1/Appointments", requestModel);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Appointment booked successfully.";
+            requestModel.AppointmentType = "";
+            requestModel.Location = "";
+            requestModel.Notes = "";
+            await LoadAppointmentsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CancelAppointmentAsync(Guid appointmentId)
+    {
+        isCancellingId = appointmentId;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Appointments/{appointmentId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var item = appointments?.FirstOrDefault(a => a.AppointmentId == appointmentId);
+                if (item != null) item.Status = "Cancelled";
+                statusMessage = "Appointment cancelled successfully.";
+            }
+            else
+            {
+                await ShowErrorAsync(response);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isCancellingId = null;
+            StateHasChanged();
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        var error = await response.Content.ReadFromJsonAsync<AppointmentsErrorResponse>(JsonOptions);
+        ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+}
