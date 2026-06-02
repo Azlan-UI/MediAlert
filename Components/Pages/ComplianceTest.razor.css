@@ -1,0 +1,124 @@
+.test-page {
+    padding: 1rem;
+}
+
+.test-panel {
+    max-width: 70rem;
+}
+
+.demo-header {
+    margin-bottom: 1rem;
+}
+
+.demo-header h1 {
+    margin: 0;
+}
+
+.demo-header p {
+    margin: 0.35rem 0 0;
+}
+
+.test-section {
+    border: 1px solid #d8dee8;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: #fff;
+}
+
+.compact-form {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 34rem;
+}
+
+.test-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.75rem 0;
+}
+
+.status-box,
+.result-block {
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.status-success,
+.success-panel {
+    border: 1px solid #b7e4c7;
+    background: #f0fff4;
+    color: #14532d;
+}
+
+.status-error {
+    border: 1px solid #f2b8b5;
+    background: #fff1f1;
+    color: #9b1c1c;
+}
+
+.medicine-grid,
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.75rem;
+}
+
+.demo-card,
+.metric-card {
+    display: grid;
+    gap: 0.35rem;
+    border: 1px solid #d8dee8;
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: #f8fafc;
+}
+
+.metric-card strong {
+    font-size: 1.6rem;
+}
+
+.dose-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.dose-list span {
+    border-radius: 999px;
+    padding: 0.2rem 0.5rem;
+    background: #e0f2fe;
+    color: #075985;
+}
+
+.demo-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.demo-table th,
+.demo-table td {
+    border-bottom: 1px solid #d8dee8;
+    padding: 0.5rem;
+    text-align: left;
+}
+
+.report-panel {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.recommendation {
+    border-left: 4px solid #2563eb;
+    padding: 0.75rem;
+    background: #eff6ff;
+}
+
+.checkbox-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}

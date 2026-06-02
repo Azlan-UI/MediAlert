@@ -1,0 +1,702 @@
+@page "/patient/compliance-test"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Compliance
+@using MediAlert.DTOs.OpenFda
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Compliance Demo</PageTitle>
+
+<section class="test-page">
+    <div class="test-panel">
+        <div class="demo-header">
+            <p class="eyebrow">Temporary testing UI</p>
+            <h1>Compliance report demo</h1>
+            <p>This page uses your saved medicines, logs doses, and renders the compliance report as normal UI.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(pageMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@pageMessage</div>
+        }
+
+        <div class="test-actions">
+            <button type="button" class="btn btn-secondary" @onclick="LoadMedicinesAsync" disabled="@isLoadingMedicines">
+                @(isLoadingMedicines ? "Refreshing..." : "Refresh medicines")
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="GoBackToMedicines">Back to medicines</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Saved medicines</h2>
+
+            @if (isLoadingMedicines)
+            {
+                <p>Loading medicines...</p>
+            }
+            else if (medicineList?.Medicines.Count > 0)
+            {
+                <div class="medicine-grid">
+                    @foreach (var medicine in medicineList.Medicines)
+                    {
+                        <div class="demo-card">
+                            <strong>@medicine.DrugName</strong>
+                            <span>@medicine.DosageStrength - @medicine.DosageForm</span>
+                            <span>@medicine.FrequencyPerDay time(s) daily</span>
+                            <div class="dose-list">
+                                @foreach (var schedule in medicine.DoseSchedules)
+                                {
+                                    <span>@schedule.ScheduledTime.ToString("HH:mm")</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p>No saved medicines yet. Add one on the medicines page first.</p>
+            }
+        </div>
+
+        <div class="test-section">
+            <h2>Drug lookup</h2>
+            <EditForm Model="drugSearchForm" OnValidSubmit="SearchDrugAsync" class="compact-form">
+                <DataAnnotationsValidator />
+
+                <label for="drugQuery">Drug name</label>
+                <InputText id="drugQuery" class="form-control" @bind-Value="drugSearchForm.Query" />
+
+                <button type="submit" class="btn btn-primary" disabled="@isSearchingDrug">
+                    @(isSearchingDrug ? "Searching..." : "Search OpenFDA")
+                </button>
+            </EditForm>
+
+            @if (drugSearchResult is not null)
+            {
+                <div class="result-block">
+                    <h3>@drugSearchResult.Results.Count result(s) for @drugSearchResult.Query</h3>
+
+                    @foreach (var drug in drugSearchResult.Results)
+                    {
+                        <div class="demo-card">
+                            <strong>@DisplayNames(drug)</strong>
+                            <span>Manufacturer: @DisplayList(drug.ManufacturerNames)</span>
+                            <span>Route: @DisplayList(drug.Routes)</span>
+
+                            @if (drug.Warnings.Count > 0)
+                            {
+                                <p><strong>Warning:</strong> @TrimText(drug.Warnings[0])</p>
+                            }
+
+                            @if (drug.DrugInteractions.Count > 0)
+                            {
+                                <p><strong>Interaction note:</strong> @TrimText(drug.DrugInteractions[0])</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="test-section">
+            <h2>Log today's dose</h2>
+
+            @if (DoseOptions.Count == 0)
+            {
+                <p>Add a medicine with a schedule before recording intake.</p>
+            }
+            else
+            {
+                <EditForm Model="intakeForm" OnValidSubmit="RecordIntakeAsync" class="compact-form">
+                    <DataAnnotationsValidator />
+
+                    <label for="doseSelect">Dose</label>
+                    <InputSelect id="doseSelect" class="form-control" @bind-Value="intakeForm.DoseScheduleId">
+                        @foreach (var option in DoseOptions)
+                        {
+                            <option value="@option.DoseScheduleId">@option.Label</option>
+                        }
+                    </InputSelect>
+
+                    <label for="status">Status</label>
+                    <InputSelect id="status" class="form-control" @bind-Value="intakeForm.Status">
+                        <option value="Taken">Taken</option>
+                        <option value="Delayed">Delayed</option>
+                        <option value="Skipped">Skipped</option>
+                        <option value="Missed">Missed</option>
+                    </InputSelect>
+
+                    <label for="notes">Notes</label>
+                    <InputTextArea id="notes" class="form-control" @bind-Value="intakeForm.Notes" />
+
+                    <button type="submit" class="btn btn-primary" disabled="@isRecordingIntake">
+                        @(isRecordingIntake ? "Saving..." : "Record dose")
+                    </button>
+                </EditForm>
+            }
+
+            @if (lastIntake is not null)
+            {
+                <div class="result-block success-panel">
+                    <strong>@lastIntake.MedicationName</strong>
+                    <span>@lastIntake.Status on @lastIntake.ScheduledDate at @lastIntake.ScheduledTime.ToString("HH:mm")</span>
+                </div>
+            }
+        </div>
+
+        <div class="test-section">
+            <h2>Compliance history</h2>
+            <EditForm Model="historyForm" OnValidSubmit="LoadHistoryAsync" class="compact-form">
+                <DataAnnotationsValidator />
+
+                <label for="fromDate">From</label>
+                <InputDate id="fromDate" class="form-control" @bind-Value="historyForm.FromDate" />
+
+                <label for="toDate">To</label>
+                <InputDate id="toDate" class="form-control" @bind-Value="historyForm.ToDate" />
+
+                <button type="submit" class="btn btn-primary" disabled="@isLoadingHistory">
+                    @(isLoadingHistory ? "Loading..." : "View history")
+                </button>
+            </EditForm>
+
+            @if (history is not null)
+            {
+                <div class="result-block">
+                    <h3>@history.TotalLogs log(s)</h3>
+
+                    @if (history.Logs.Count == 0)
+                    {
+                        <p>No intake logs in this range.</p>
+                    }
+                    else
+                    {
+                        <table class="demo-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Medicine</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var log in history.Logs)
+                                {
+                                    <tr>
+                                        <td>@log.ScheduledDate</td>
+                                        <td>@log.MedicationName</td>
+                                        <td>@log.ScheduledTime.ToString("HH:mm")</td>
+                                        <td>@log.Status</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="test-section">
+            <h2>Generate compliance report</h2>
+            <EditForm Model="reportForm" OnValidSubmit="GenerateReportAsync" class="compact-form">
+                <DataAnnotationsValidator />
+
+                <label for="periodStart">Period start</label>
+                <InputDate id="periodStart" class="form-control" @bind-Value="reportForm.PeriodStartDate" />
+
+                <label for="periodEnd">Period end</label>
+                <InputDate id="periodEnd" class="form-control" @bind-Value="reportForm.PeriodEndDate" />
+
+                <label class="checkbox-row">
+                    <InputCheckbox @bind-Value="reportForm.IncludeOpenFdaSafetySummary" />
+                    Include OpenFDA safety summary
+                </label>
+
+                <button type="submit" class="btn btn-primary" disabled="@isGeneratingReport">
+                    @(isGeneratingReport ? "Generating..." : "Generate report")
+                </button>
+            </EditForm>
+
+            @if (report is not null)
+            {
+                <div class="report-panel">
+                    <div class="metric-grid">
+                        <div class="metric-card">
+                            <strong>@report.OverallCompliancePercentage%</strong>
+                            <span>Overall compliance</span>
+                        </div>
+                        <div class="metric-card">
+                            <strong>@report.TakenDoses</strong>
+                            <span>Taken</span>
+                        </div>
+                        <div class="metric-card">
+                            <strong>@report.SkippedDoses</strong>
+                            <span>Skipped</span>
+                        </div>
+                        <div class="metric-card">
+                            <strong>@report.MissedDoses</strong>
+                            <span>Missed</span>
+                        </div>
+                    </div>
+
+                    <p class="recommendation">@report.Recommendations</p>
+
+                    <h3>Per medicine</h3>
+                    <div class="medicine-grid">
+                        @foreach (var medication in report.MedicationSummaries)
+                        {
+                            <div class="demo-card">
+                                <strong>@medication.DrugName</strong>
+                                <span>@medication.CompliancePercentage% compliant</span>
+                                <span>@medication.TakenDoses taken, @medication.SkippedDoses skipped, @medication.MissedDoses missed</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (report.OpenFdaSafetySummaries.Count > 0)
+                    {
+                        <h3>OpenFDA safety notes</h3>
+                        <div class="medicine-grid">
+                            @foreach (var safety in report.OpenFdaSafetySummaries)
+                            {
+                                <div class="demo-card">
+                                    <strong>@safety.DrugName</strong>
+                                    @if (!safety.RetrievedFromOpenFda)
+                                    {
+                                        <span>@safety.ErrorMessage</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Brand: @DisplayList(safety.BrandNames)</span>
+                                        @if (safety.Warnings.Count > 0)
+                                        {
+                                            <p><strong>Warning:</strong> @TrimText(safety.Warnings[0])</p>
+                                        }
+                                        @if (safety.DrugInteractions.Count > 0)
+                                        {
+                                            <p><strong>Interaction:</strong> @TrimText(safety.DrugInteractions[0])</p>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="test-section">
+            <h2>Error testing</h2>
+            <button type="button" class="btn btn-secondary" @onclick="SendInvalidReportAsync" disabled="@isTestingError">
+                Send invalid report request
+            </button>
+
+            @if (!string.IsNullOrWhiteSpace(errorTestMessage))
+            {
+                <div class="result-block status-error">@errorTestMessage</div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private string? token;
+    private string? pageMessage;
+    private string? errorTestMessage;
+    private bool hasError;
+    private bool isLoadingMedicines;
+    private bool isSearchingDrug;
+    private bool isRecordingIntake;
+    private bool isLoadingHistory;
+    private bool isGeneratingReport;
+    private bool isTestingError;
+
+    private PatientMedicationListResponse? medicineList;
+    private OpenFdaDrugSearchResponse? drugSearchResult;
+    private IntakeLogResponse? lastIntake;
+    private ComplianceHistoryResponse? history;
+    private ComplianceReportResponse? report;
+
+    private readonly DrugSearchForm drugSearchForm = new();
+    private readonly IntakeForm intakeForm = new();
+    private readonly HistoryForm historyForm = new();
+    private readonly ReportForm reportForm = new();
+
+    private List<DoseOption> DoseOptions =>
+        medicineList?.Medicines
+            .SelectMany(medicine => medicine.DoseSchedules.Select(schedule =>
+                new DoseOption(
+                    schedule.DoseScheduleId,
+                    $"{medicine.DrugName} at {schedule.ScheduledTime:HH:mm}")))
+            .ToList()
+        ?? [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadMedicinesAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadMedicinesAsync()
+    {
+        isLoadingMedicines = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/patient/medicines");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            medicineList = await response.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+
+            var firstDose = DoseOptions.FirstOrDefault();
+            if (firstDose is not null && string.IsNullOrWhiteSpace(intakeForm.DoseScheduleId))
+            {
+                intakeForm.DoseScheduleId = firstDose.DoseScheduleId.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoadingMedicines = false;
+        }
+    }
+
+    private async Task SearchDrugAsync()
+    {
+        isSearchingDrug = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync(
+                $"api/openfda/drugs/search?query={Uri.EscapeDataString(drugSearchForm.Query)}&limit=3");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            drugSearchResult = await response.Content.ReadFromJsonAsync<OpenFdaDrugSearchResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSearchingDrug = false;
+        }
+    }
+
+    private async Task RecordIntakeAsync()
+    {
+        if (medicineList is null || medicineList.PatientId == Guid.Empty)
+        {
+            ShowError("No patient profile is loaded.");
+            return;
+        }
+
+        if (!Guid.TryParse(intakeForm.DoseScheduleId, out var doseScheduleId))
+        {
+            ShowError("Choose a valid dose schedule.");
+            return;
+        }
+
+        isRecordingIntake = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/compliance/intake-logs", new RecordIntakeRequest
+            {
+                PatientId = medicineList.PatientId,
+                DoseScheduleId = doseScheduleId,
+                ScheduledDate = DateOnly.FromDateTime(DateTime.Today),
+                Status = intakeForm.Status,
+                ActualTakenAt = intakeForm.Status is "Taken" or "Delayed" ? DateTime.UtcNow : null,
+                Notes = intakeForm.Notes,
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            lastIntake = await response.Content.ReadFromJsonAsync<IntakeLogResponse>(JsonOptions);
+            ShowSuccess("Dose recorded successfully.");
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isRecordingIntake = false;
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        if (medicineList is null || medicineList.PatientId == Guid.Empty)
+        {
+            ShowError("No patient profile is loaded.");
+            return;
+        }
+
+        isLoadingHistory = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var url = $"api/compliance/history?patientId={medicineList.PatientId}" +
+                      $"&fromDate={historyForm.FromDate:yyyy-MM-dd}" +
+                      $"&toDate={historyForm.ToDate:yyyy-MM-dd}";
+
+            var response = await http.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            history = await response.Content.ReadFromJsonAsync<ComplianceHistoryResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoadingHistory = false;
+        }
+    }
+
+    private async Task GenerateReportAsync()
+    {
+        if (medicineList is null || medicineList.PatientId == Guid.Empty)
+        {
+            ShowError("No patient profile is loaded.");
+            return;
+        }
+
+        isGeneratingReport = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/compliance/reports/generate", new GenerateComplianceReportRequest
+            {
+                PatientId = medicineList.PatientId,
+                PeriodStartDate = DateOnly.FromDateTime(reportForm.PeriodStartDate),
+                PeriodEndDate = DateOnly.FromDateTime(reportForm.PeriodEndDate),
+                IncludeOpenFdaSafetySummary = reportForm.IncludeOpenFdaSafetySummary,
+                PersistReport = true,
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            report = await response.Content.ReadFromJsonAsync<ComplianceReportResponse>(JsonOptions);
+            ShowSuccess("Compliance report generated.");
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isGeneratingReport = false;
+        }
+    }
+
+    private async Task SendInvalidReportAsync()
+    {
+        isTestingError = true;
+        errorTestMessage = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/compliance/reports/generate", new GenerateComplianceReportRequest
+            {
+                PatientId = Guid.Empty,
+                PeriodStartDate = DateOnly.FromDateTime(DateTime.Today),
+                PeriodEndDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-2)),
+                IncludeOpenFdaSafetySummary = false,
+                PersistReport = false,
+            });
+
+            errorTestMessage = response.IsSuccessStatusCode
+                ? "Unexpected success. The invalid request should have failed."
+                : await ReadErrorMessageAsync(response);
+        }
+        catch (Exception ex)
+        {
+            errorTestMessage = ex.Message;
+        }
+        finally
+        {
+            isTestingError = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri(Navigation.BaseUri)
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError(await ReadErrorMessageAsync(response));
+    }
+
+    private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        var text = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return $"Request failed with status {(int)response.StatusCode}.";
+        }
+
+        try
+        {
+            var error = JsonSerializer.Deserialize<ApiErrorEnvelope>(text, JsonOptions);
+            return error?.Message
+                ?? error?.ErrorMessage
+                ?? $"Request failed with status {(int)response.StatusCode}.";
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
+    private static string DisplayNames(OpenFdaDrugSearchItem drug)
+    {
+        if (drug.BrandNames.Count > 0)
+        {
+            return DisplayList(drug.BrandNames);
+        }
+
+        if (drug.GenericNames.Count > 0)
+        {
+            return DisplayList(drug.GenericNames);
+        }
+
+        return "Unnamed OpenFDA label";
+    }
+
+    private static string DisplayList(IEnumerable<string> values)
+    {
+        var list = values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Take(3)
+            .ToList();
+
+        return list.Count == 0 ? "Not listed" : string.Join(", ", list);
+    }
+
+    private static string TrimText(string value) =>
+        value.Length <= 220 ? value : $"{value[..220]}...";
+
+    private void ShowSuccess(string message)
+    {
+        hasError = false;
+        pageMessage = message;
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        pageMessage = message;
+    }
+
+    private void ClearMessage()
+    {
+        hasError = false;
+        pageMessage = null;
+    }
+
+    private void GoBackToMedicines()
+    {
+        Navigation.NavigateTo("/patient/medicines");
+    }
+
+    private sealed class DrugSearchForm
+    {
+        public string Query { get; set; } = "aspirin";
+    }
+
+    private sealed class IntakeForm
+    {
+        public string DoseScheduleId { get; set; } = string.Empty;
+        public string Status { get; set; } = "Taken";
+        public string? Notes { get; set; }
+    }
+
+    private sealed class HistoryForm
+    {
+        public DateTime FromDate { get; set; } = DateTime.Today.AddDays(-7);
+        public DateTime ToDate { get; set; } = DateTime.Today;
+    }
+
+    private sealed class ReportForm
+    {
+        public DateTime PeriodStartDate { get; set; } = DateTime.Today.AddDays(-7);
+        public DateTime PeriodEndDate { get; set; } = DateTime.Today;
+        public bool IncludeOpenFdaSafetySummary { get; set; } = true;
+    }
+
+    private sealed record DoseOption(Guid DoseScheduleId, string Label);
+
+    private sealed class ApiErrorEnvelope
+    {
+        public string? Message { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? ErrorCode { get; set; }
+    }
+}
