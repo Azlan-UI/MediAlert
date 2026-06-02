@@ -1,0 +1,88 @@
+@page "/appointments/calendar"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Appointment Calendar</PageTitle>
+
+<section class="calendar-page">
+    <div class="calendar-panel">
+        <div class="calendar-header">
+            <h1>My Calendar</h1>
+            <div class="header-actions">
+                <button class="btn btn-secondary" @onclick="GoToManager">Manage Appointments</button>
+            </div>
+        </div>
+
+        <div class="calendar-grid-container">
+            <div class="calendar-nav">
+                <button class="btn btn-icon">&lt;</button>
+                <h2>@currentMonth.ToString("MMMM yyyy")</h2>
+                <button class="btn btn-icon">&gt;</button>
+            </div>
+
+            <div class="calendar-grid">
+                <div class="weekday">Sun</div>
+                <div class="weekday">Mon</div>
+                <div class="weekday">Tue</div>
+                <div class="weekday">Wed</div>
+                <div class="weekday">Thu</div>
+                <div class="weekday">Fri</div>
+                <div class="weekday">Sat</div>
+
+                @for (int i = 0; i < 35; i++)
+                {
+                    var dayOffset = i - startOffset;
+                    var date = currentMonth.AddDays(dayOffset);
+                    var isCurrentMonth = date.Month == currentMonth.Month;
+                    var isToday = date.Date == DateTime.Today;
+
+                    <div class="calendar-day @(isCurrentMonth ? "" : "other-month") @(isToday ? "today" : "")">
+                        <span class="day-number">@date.Day</span>
+                        
+                        @foreach (var appt in GetAppointmentsForDate(date))
+                        {
+                            <div class="calendar-event">
+                                <span class="time">@appt.ScheduledDateTime.ToString("HH:mm")</span>
+                                <span class="title">@appt.AppointmentType</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private DateTime currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private int startOffset;
+    
+    // Mock data since no GET endpoint exists for fetching appointments by month
+    private List<AppointmentMock> mockAppointments = new();
+
+    protected override void OnInitialized()
+    {
+        startOffset = (int)currentMonth.DayOfWeek;
+        
+        // Seed mock appointments
+        mockAppointments.Add(new AppointmentMock { AppointmentType = "Cardiology", ScheduledDateTime = DateTime.Today.AddDays(2).AddHours(10) });
+        mockAppointments.Add(new AppointmentMock { AppointmentType = "Dermatology", ScheduledDateTime = DateTime.Today.AddDays(5).AddHours(14) });
+    }
+
+    private IEnumerable<AppointmentMock> GetAppointmentsForDate(DateTime date)
+    {
+        return mockAppointments.Where(a => a.ScheduledDateTime.Date == date.Date);
+    }
+
+    private void GoToManager()
+    {
+        Navigation.NavigateTo("/appointments/manager");
+    }
+
+    public class AppointmentMock
+    {
+        public string AppointmentType { get; set; } = string.Empty;
+        public DateTime ScheduledDateTime { get; set; }
+    }
+}
