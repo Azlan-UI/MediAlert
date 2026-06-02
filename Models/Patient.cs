@@ -14,4 +14,8 @@ public class Patient
     public ICollection<Medication> Medications { get; set; } = [];
     public ICollection<IntakeLog> IntakeLogs { get; set; } = [];
     public ICollection<ComplianceReport> ComplianceReports { get; set; } = [];
+    public ICollection<CaregiverPatientLink> Caregivers { get; set; } = [];
+    public ICollection<PatientDoctorLink> Doctors { get; set; } = [];
+    public ICollection<Consultation> Consultations { get; set; } = [];
+    public ICollection<Subscription> Subscriptions { get; set; } = [];
 }

@@ -36,6 +36,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
     public DbSet<DoseSchedule> DoseSchedules => Set<DoseSchedule>();
     public DbSet<IntakeLog> IntakeLogs => Set<IntakeLog>();
     public DbSet<ComplianceReport> ComplianceReports => Set<ComplianceReport>();
+    public DbSet<Caregiver> Caregivers => Set<Caregiver>();
+    public DbSet<Doctor> Doctors => Set<Doctor>();
+    public DbSet<Admin> Admins => Set<Admin>();
+    public DbSet<CaregiverPatientLink> CaregiverPatientLinks => Set<CaregiverPatientLink>();
+    public DbSet<DoctorAvailability> DoctorAvailabilities => Set<DoctorAvailability>();
+    public DbSet<PatientDoctorLink> PatientDoctorLinks => Set<PatientDoctorLink>();
+    public DbSet<Consultation> Consultations => Set<Consultation>();
+    public DbSet<ConsultationNote> ConsultationNotes => Set<ConsultationNote>();
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<ProcessedStripeEvent> ProcessedStripeEvents => Set<ProcessedStripeEvent>();
+    public DbSet<BillingAuditLog> BillingAuditLogs => Set<BillingAuditLog>();
+
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -278,5 +291,157 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
                 .HasForeignKey(cr => cr.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+        builder.Entity<Caregiver>(entity =>
+        {
+            entity.HasKey(c => c.CaregiverId);
+            entity.Property(c => c.UserId).IsRequired();
+            entity.Property(c => c.PhoneNumber).HasMaxLength(20);
+            entity.Property(c => c.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(c => c.UserId).IsUnique().HasDatabaseName("IX_Caregivers_UserId");
+            
+            entity.HasOne(c => c.User).WithOne().HasForeignKey<Caregiver>(c => c.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Doctor>(entity =>
+        {
+            entity.HasKey(d => d.DoctorId);
+            entity.Property(d => d.UserId).IsRequired();
+            entity.Property(d => d.LicenseNumber).IsRequired().HasMaxLength(50);
+            entity.Property(d => d.Specialization).IsRequired().HasMaxLength(100);
+            entity.Property(d => d.Qualifications).IsRequired().HasMaxLength(200);
+            entity.Property(d => d.VerificationStatus).IsRequired().HasMaxLength(20);
+            entity.Property(d => d.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(d => d.UserId).IsUnique().HasDatabaseName("IX_Doctors_UserId");
+            entity.HasIndex(d => d.LicenseNumber).IsUnique().HasDatabaseName("UX_Doctors_LicenseNumber");
+            
+            entity.HasOne(d => d.User).WithOne().HasForeignKey<Doctor>(d => d.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Admin>(entity =>
+        {
+            entity.HasKey(a => a.AdminId);
+            entity.Property(a => a.UserId).IsRequired();
+            entity.Property(a => a.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(a => a.UserId).IsUnique().HasDatabaseName("IX_Admins_UserId");
+            
+            entity.HasOne(a => a.User).WithOne().HasForeignKey<Admin>(a => a.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<CaregiverPatientLink>(entity =>
+        {
+            entity.HasKey(l => l.CaregiverPatientLinkId);
+            entity.Property(l => l.Status).IsRequired().HasMaxLength(20);
+            entity.Property(l => l.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(l => new { l.CaregiverId, l.PatientId }).IsUnique().HasDatabaseName("UX_CaregiverPatientLinks_Caregiver_Patient");
+            
+            entity.HasOne(l => l.Caregiver).WithMany(c => c.LinkedPatients).HasForeignKey(l => l.CaregiverId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(l => l.Patient).WithMany(p => p.Caregivers).HasForeignKey(l => l.PatientId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<DoctorAvailability>(entity =>
+        {
+            entity.HasKey(a => a.DoctorAvailabilityId);
+            entity.Property(a => a.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(a => new { a.DoctorId, a.DayOfWeek }).HasDatabaseName("IX_DoctorAvailabilities_Doctor_DayOfWeek");
+            
+            entity.HasOne(a => a.Doctor).WithMany(d => d.Availabilities).HasForeignKey(a => a.DoctorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<PatientDoctorLink>(entity =>
+        {
+            entity.HasKey(l => l.PatientDoctorLinkId);
+            entity.Property(l => l.Status).IsRequired().HasMaxLength(20);
+            entity.Property(l => l.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(l => new { l.PatientId, l.DoctorId }).IsUnique().HasDatabaseName("UX_PatientDoctorLinks_Patient_Doctor");
+            
+            entity.HasOne(l => l.Patient).WithMany(p => p.Doctors).HasForeignKey(l => l.PatientId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(l => l.Doctor).WithMany(d => d.LinkedPatients).HasForeignKey(l => l.DoctorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Consultation>(entity =>
+        {
+            entity.HasKey(c => c.ConsultationId);
+            entity.Property(c => c.Type).IsRequired().HasMaxLength(50);
+            entity.Property(c => c.Status).IsRequired().HasMaxLength(20);
+            entity.Property(c => c.ZoomMeetingUrl).HasMaxLength(500);
+            entity.Property(c => c.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(c => new { c.DoctorId, c.ScheduledDateTime }).HasDatabaseName("IX_Consultations_Doctor_ScheduledTime");
+            
+            entity.HasOne(c => c.Patient).WithMany(p => p.Consultations).HasForeignKey(c => c.PatientId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(c => c.Doctor).WithMany(d => d.Consultations).HasForeignKey(c => c.DoctorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ConsultationNote>(entity =>
+        {
+            entity.HasKey(n => n.ConsultationNoteId);
+            entity.Property(n => n.ClinicalNotes).IsRequired();
+            entity.Property(n => n.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(n => n.ConsultationId).IsUnique().HasDatabaseName("IX_ConsultationNotes_ConsultationId");
+            
+            entity.HasOne(n => n.Consultation).WithOne(c => c.ConsultationNote).HasForeignKey<ConsultationNote>(n => n.ConsultationId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Subscription>(entity =>
+        {
+            entity.HasKey(s => s.SubscriptionId);
+            entity.Property(s => s.Tier).IsRequired().HasMaxLength(50);
+            entity.Property(s => s.Status).IsRequired().HasMaxLength(20);
+            entity.Property(s => s.StripeCustomerId).HasMaxLength(150);
+            entity.Property(s => s.StripeSubscriptionId).HasMaxLength(150);
+            entity.Property(s => s.StripePriceId).HasMaxLength(150);
+            entity.Property(s => s.CancelAtPeriodEnd).IsRequired().HasDefaultValue(false);
+            entity.Property(s => s.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(s => s.PatientId).HasDatabaseName("IX_Subscriptions_PatientId");
+            entity.HasIndex(s => s.StripeCustomerId).HasDatabaseName("IX_Subscriptions_StripeCustomerId");
+            entity.HasIndex(s => s.StripeSubscriptionId).IsUnique().HasDatabaseName("UX_Subscriptions_StripeSubscriptionId");
+            
+            entity.HasOne(s => s.Patient).WithMany(p => p.Subscriptions).HasForeignKey(s => s.PatientId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<Invoice>(entity =>
+        {
+            entity.HasKey(i => i.InvoiceId);
+            entity.Property(i => i.StripeInvoiceId).HasMaxLength(150);
+            entity.Property(i => i.Currency).IsRequired().HasMaxLength(10);
+            entity.Property(i => i.Status).IsRequired().HasMaxLength(20);
+            entity.Property(i => i.HostedInvoiceUrl).HasMaxLength(500);
+            entity.Property(i => i.InvoicePdfUrl).HasMaxLength(500);
+            entity.Property(i => i.AttemptCount).IsRequired().HasDefaultValue(0);
+            entity.Property(i => i.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+            
+            entity.HasIndex(i => i.SubscriptionId).HasDatabaseName("IX_Invoices_SubscriptionId");
+            entity.HasIndex(i => i.StripeInvoiceId).IsUnique().HasDatabaseName("UX_Invoices_StripeInvoiceId");
+            
+            entity.HasOne(i => i.Subscription).WithMany(s => s.Invoices).HasForeignKey(i => i.SubscriptionId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ProcessedStripeEvent>(entity =>
+        {
+            entity.HasKey(e => e.EventId);
+            entity.Property(e => e.EventId).HasMaxLength(255);
+            entity.Property(e => e.ProcessedAt).IsRequired().HasDefaultValueSql("NOW()");
+        });
+
+        builder.Entity<BillingAuditLog>(entity =>
+        {
+            entity.HasKey(a => a.AuditId);
+            entity.Property(a => a.Action).IsRequired().HasMaxLength(100);
+            entity.Property(a => a.Details).HasMaxLength(1000);
+            entity.Property(a => a.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+
+            entity.HasIndex(a => a.PatientId).HasDatabaseName("IX_BillingAuditLogs_PatientId");
+
+            entity.HasOne(a => a.Patient).WithMany().HasForeignKey(a => a.PatientId).OnDelete(DeleteBehavior.Restrict);
+        });
+
     }
 }
