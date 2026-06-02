@@ -1,0 +1,159 @@
+.consultations-page {
+    padding: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 2.5rem;
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    color: #111827;
+    margin: 0 0 0.5rem;
+}
+
+.page-header p {
+    color: #6b7280;
+}
+
+.tabs {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.tab {
+    background: transparent;
+    border: none;
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab:hover {
+    color: #374151;
+}
+
+.tab.active {
+    color: #8b5cf6;
+    border-bottom-color: #8b5cf6;
+}
+
+.consultation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.consultation-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border: 1px solid #f3f4f6;
+}
+
+@media (max-width: 600px) {
+    .consultation-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .cons-actions {
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+    }
+}
+
+.cons-date {
+    background: #f5f3ff;
+    color: #8b5cf6;
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    min-width: 80px;
+}
+
+.cons-day {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.cons-month {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+.cons-details {
+    flex: 1;
+}
+
+.cons-details h3 {
+    margin: 0 0 0.25rem;
+    font-size: 1.2rem;
+    color: #111827;
+}
+
+.cons-time {
+    color: #6b7280;
+    font-size: 0.95rem;
+    margin-bottom: 0.5rem;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-scheduled { background: #dbeafe; color: #1e40af; }
+.status-completed { background: #d1fae5; color: #065f46; }
+.status-cancelled { background: #fee2e2; color: #991b1b; }
+
+.cons-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    white-space: nowrap;
+}
+
+.btn-primary { background: #8b5cf6; color: white; }
+.btn-primary:hover { background: #7c3aed; }
+
+.btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+.btn-outline:hover { background: #f3f4f6; }
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.empty-state-small {
+    text-align: center;
+    padding: 2rem;
+    color: #6b7280;
+    background: #f9fafb;
+    border-radius: 8px;
+}

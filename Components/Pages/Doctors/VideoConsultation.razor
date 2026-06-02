@@ -1,0 +1,97 @@
+@page "/consultations/{ConsultationId:guid}/video"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Video Consultation</PageTitle>
+
+<div class="video-call-container">
+    <div class="video-main">
+        <!-- Main Video Area (Doctor) -->
+        <div class="remote-video">
+            @if (isCallActive)
+            {
+                <div class="video-placeholder doctor-feed">
+                    <img src="/images/doctor-placeholder.svg" alt="Doctor" class="fallback-img" />
+                    <span class="participant-name">Dr. Jane Doe</span>
+                </div>
+            }
+            else
+            {
+                <div class="waiting-room">
+                    <div class="spinner"></div>
+                    <h2>Waiting for Doctor...</h2>
+                    <p>Your consultation will begin shortly.</p>
+                </div>
+            }
+        </div>
+
+        <!-- Self Video (Patient) -->
+        <div class="local-video @(isCameraOff ? "camera-off" : "")">
+            @if (isCameraOff)
+            {
+                <div class="avatar-initial">Me</div>
+            }
+            else
+            {
+                <div class="video-placeholder patient-feed">
+                    <span class="camera-active-indicator"></span>
+                </div>
+            }
+        </div>
+
+        <!-- Controls Toolbar -->
+        <div class="call-controls">
+            <button class="control-btn @(isMuted ? "disabled" : "")" @onclick="ToggleMute" title="@(isMuted ? "Unmute" : "Mute")">
+                <i class="icon">@(isMuted ? "🔇" : "🎤")</i>
+            </button>
+            <button class="control-btn @(isCameraOff ? "disabled" : "")" @onclick="ToggleCamera" title="@(isCameraOff ? "Turn on Camera" : "Turn off Camera")">
+                <i class="icon">@(isCameraOff ? "📷 (Off)" : "📷")</i>
+            </button>
+            <button class="control-btn btn-end-call" @onclick="EndCall" title="End Call">
+                <i class="icon">📞</i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h3>Consultation Notes</h3>
+        </div>
+        <div class="notes-area">
+            <textarea class="notes-input" placeholder="Type your personal notes here..."></textarea>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid ConsultationId { get; set; }
+
+    private bool isCallActive = false;
+    private bool isMuted = false;
+    private bool isCameraOff = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Simulate waiting room
+        await Task.Delay(3000);
+        isCallActive = true;
+        StateHasChanged();
+    }
+
+    private void ToggleMute()
+    {
+        isMuted = !isMuted;
+    }
+
+    private void ToggleCamera()
+    {
+        isCameraOff = !isCameraOff;
+    }
+
+    private void EndCall()
+    {
+        Navigation.NavigateTo("/consultations");
+    }
+}
