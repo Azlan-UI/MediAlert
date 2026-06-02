@@ -1,0 +1,279 @@
+@page "/billing/dashboard"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Billing
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Subscription Dashboard</PageTitle>
+
+<section class="billing-dashboard">
+    <div class="page-header">
+        <h1>Subscription & Billing</h1>
+        <p>Manage your MediAlert subscription and view payment history.</p>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading subscription details...</p>
+        </div>
+    }
+    else if (errorMessage != null)
+    {
+        <div class="alert alert-error">@errorMessage</div>
+    }
+    else if (subscription != null)
+    {
+        <div class="dashboard-grid">
+            <!-- Current Plan Panel -->
+            <div class="panel plan-panel">
+                <div class="panel-header">
+                    <h2>Current Plan</h2>
+                    <span class="status-badge status-@DisplayStatus.ToLower()">@DisplayStatus</span>
+                </div>
+                
+                <div class="plan-details">
+                    <div class="plan-name">
+                        <span class="tier-icon">💎</span>
+                        <h3>@subscription.Tier Plan</h3>
+                    </div>
+                    
+                    <div class="plan-info">
+                        <div class="info-row">
+                            <span class="info-label">Started On</span>
+                            <span class="info-value">@subscription.StartDate.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        @if (subscription.RenewalDate.HasValue)
+                        {
+                            <div class="info-row">
+                                <span class="info-label">Next Billing Date</span>
+                                <span class="info-value">@subscription.RenewalDate.Value.ToString("MMM dd, yyyy")</span>
+                            </div>
+                        }
+                        @if (subscription.CancelAtPeriodEnd)
+                        {
+                            <div class="info-row">
+                                <span class="info-label">Cancellation</span>
+                                <span class="info-value">Scheduled at period end</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="plan-actions">
+                        @if (IsFreePlan)
+                        {
+                            <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/billing/upgrade")'>@(IsResubscribeState ? "Resubscribe" : "Upgrade")</button>
+                        }
+                        else if (subscription.CancelAtPeriodEnd)
+                        {
+                            <button class="btn btn-primary" @onclick="ReactivateSubscriptionAsync" disabled="@isCancelling">
+                                @(isCancelling ? "Resuming..." : "Resume Subscription")
+                            </button>
+                            <button class="btn btn-danger-outline" @onclick="DowngradeToFreeAsync" disabled="@isCancelling">Downgrade to Free</button>
+                        }
+                        else if (subscription.Status.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button class="btn btn-danger-outline" @onclick="CancelSubscriptionAsync" disabled="@isCancelling">
+                                @(isCancelling ? "Cancelling..." : "Cancel Subscription")
+                            </button>
+                            <button class="btn btn-danger-outline" @onclick="DowngradeToFreeAsync" disabled="@isCancelling">Downgrade to Free</button>
+                        }
+                        else if (subscription.Status.Equals("PastDue", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <button class="btn btn-danger-outline" @onclick="CancelSubscriptionAsync" disabled="@isCancelling">
+                                @(isCancelling ? "Cancelling..." : "Cancel Subscription")
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Invoices Panel -->
+            <div class="panel invoices-panel">
+                <div class="panel-header flex-between">
+                    <h2>Recent Invoices</h2>
+                    <button class="btn-link" @onclick='() => Navigation.NavigateTo("/billing/history")'>View All</button>
+                </div>
+                
+                @if (subscription.RecentInvoices != null && subscription.RecentInvoices.Any())
+                {
+                    <div class="invoice-list">
+                        @foreach (var invoice in subscription.RecentInvoices.Take(3))
+                        {
+                            <div class="invoice-item">
+                                <div class="inv-info">
+                                    <span class="inv-date">@invoice.DueDate.ToString("MMM dd, yyyy")</span>
+                                    <span class="inv-amount">@invoice.Currency @invoice.Amount.ToString("0.00")</span>
+                                </div>
+                                <span class="inv-status status-@invoice.Status.ToLower()">@invoice.Status</span>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state-small">
+                        <p>No recent invoices found.</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state text-center py-5">
+            <h3>No Active Subscription</h3>
+            <p>Upgrade your plan to unlock premium features like video consultations and advanced reports.</p>
+            <button class="btn btn-primary mt-3" @onclick='() => Navigation.NavigateTo("/billing/upgrade")'>
+                View Plans &amp; Upgrade
+            </button>
+        </div>
+    }
+</section>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private SubscriptionDetailsResponse? subscription;
+    private bool isCancelling = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubscriptionAsync();
+    }
+
+    private async Task LoadSubscriptionAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await httpClient.GetAsync("/api/v1/Billing/subscription/details");
+            if (response.IsSuccessStatusCode)
+            {
+                subscription = await response.Content.ReadFromJsonAsync<SubscriptionDetailsResponse>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                subscription = new SubscriptionDetailsResponse
+                {
+                    Tier = "Free",
+                    Status = "Free",
+                    StartDate = DateTime.UtcNow
+                };
+            }
+            else
+            {
+                errorMessage = "Failed to load subscription details.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "Could not reach the billing service.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CancelSubscriptionAsync()
+    {
+        isCancelling = true;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await httpClient.PostAsJsonAsync("/api/v1/Billing/cancel", new CancelSubscriptionRequest
+            {
+                CancelAtPeriodEnd = true,
+                Reason = "Cancelled from subscription dashboard"
+            });
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadSubscriptionAsync();
+            }
+            else
+            {
+                errorMessage = "Failed to cancel subscription. Please try again.";
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "Could not reach the billing service.";
+        }
+        finally
+        {
+            isCancelling = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ReactivateSubscriptionAsync()
+    {
+        await PostSubscriptionActionAsync("/api/v1/Billing/reactivate", "Failed to resume subscription.");
+    }
+
+    private async Task DowngradeToFreeAsync()
+    {
+        await PostSubscriptionActionAsync("/api/v1/Billing/downgrade-free", "Failed to downgrade subscription.");
+    }
+
+    private async Task PostSubscriptionActionAsync(string url, string failureMessage)
+    {
+        isCancelling = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await httpClient.PostAsync(url, null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadSubscriptionAsync();
+            }
+            else
+            {
+                errorMessage = failureMessage;
+            }
+        }
+        catch (Exception)
+        {
+            errorMessage = "Could not reach the billing service.";
+        }
+        finally
+        {
+            isCancelling = false;
+            StateHasChanged();
+        }
+    }
+
+    private string DisplayStatus =>
+        subscription?.Tier.Equals("Free", StringComparison.OrdinalIgnoreCase) == true
+            && subscription.Status.Equals("Active", StringComparison.OrdinalIgnoreCase)
+                ? "Free"
+                : subscription?.Status ?? "Free";
+
+    private bool IsFreePlan =>
+        subscription?.Tier.Equals("Free", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsResubscribeState =>
+        subscription?.Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase) == true
+        || subscription?.Status.Equals("Expired", StringComparison.OrdinalIgnoreCase) == true;
+}
