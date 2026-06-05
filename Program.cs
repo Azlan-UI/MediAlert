@@ -1,3 +1,4 @@
+using MediAlert;
 using MediAlert.Components;
 using MediAlert.Configuration;
 using MediAlert.Constants;
