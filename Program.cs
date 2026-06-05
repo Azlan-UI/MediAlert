@@ -10,6 +10,7 @@ using MediAlert.Services.Compliance;
 using MediAlert.Services.OpenFda;
 using MediAlert.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -199,6 +200,8 @@ builder.Services.AddAuthorization(options =>
         policy.AddRequirements(new PremiumAccessRequirement());
     });
 });
+
+builder.Services.AddScoped<IAuthorizationHandler, PremiumAccessHandler>();
 
 // ─── 6. OUR SERVICES (Dependency Injection) ──────────────────────────────────
 // Register our custom services so the DI container can inject them.
