@@ -7,16 +7,13 @@ namespace MediAlert.Services.Auth;
 public sealed class AuthService : IAuthService
 {
     private readonly UserManager<ApplicatioUser> _userManager;
-    private readonly SignInManager<ApplicatioUser> _signInManager;
     private readonly IJwtTokenService _jwtTokenService;
 
     public AuthService(
         UserManager<ApplicatioUser> userManager,
-        SignInManager<ApplicatioUser> signInManager,
         IJwtTokenService jwtTokenService)
     {
         _userManager = userManager;
-        _signInManager = signInManager;
         _jwtTokenService = jwtTokenService;
     }
 
@@ -32,8 +29,8 @@ public sealed class AuthService : IAuthService
         if (!user.IsEmailVerified)
             throw new UnauthorizedAccessException("Email not verified. Please check your inbox.");
 
-        var result = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
-        if (!result.Succeeded)
+        var passwordValid = await _userManager.CheckPasswordAsync(user, request.Password);
+        if (!passwordValid)
             throw new UnauthorizedAccessException("Invalid email or password.");
 
         var token = _jwtTokenService.GenerateToken(user);

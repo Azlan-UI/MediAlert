@@ -211,6 +211,7 @@ builder.Services.AddAuthorization(options =>
 // AuthService is Scoped because it uses UserManager which is Scoped.
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, MediAlert.Providers.JwtAuthenticationStateProvider>();
 
