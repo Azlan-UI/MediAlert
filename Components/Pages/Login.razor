@@ -1,10 +1,13 @@
 @page "/login"
 @rendermode InteractiveServer
 @using System.Net
+@using System.Security.Claims
 @using MediAlert.Constants
 @using MediAlert.DTOs.Auth
+@using MediAlert.Providers
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Login</PageTitle>
 
@@ -73,6 +76,7 @@
                 }
 
                 await SaveAuthForTestingAsync(auth);
+                NotifyAuthState(auth);
                 NavigateAfterLogin(auth);
                 return;
             }
@@ -115,5 +119,24 @@
         await JS.InvokeVoidAsync("localStorage.setItem", "medialert_user_id", auth.UserId);
         await JS.InvokeVoidAsync("localStorage.setItem", "medialert_role", auth.Role);
         await JS.InvokeVoidAsync("localStorage.setItem", "medialert_full_name", auth.FullName);
+    }
+
+    private void NotifyAuthState(AuthResponse auth)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Role, auth.Role),
+            new(ClaimTypes.NameIdentifier, auth.UserId),
+            new(ClaimTypes.Name, auth.FullName),
+            new(ClaimTypes.Email, auth.Email),
+        };
+
+        var identity = new ClaimsIdentity(claims, "jwt");
+        var principal = new ClaimsPrincipal(identity);
+
+        if (AuthStateProvider is JwtAuthenticationStateProvider jwtProvider)
+        {
+            jwtProvider.NotifyUserAuthentication(principal);
+        }
     }
 }
