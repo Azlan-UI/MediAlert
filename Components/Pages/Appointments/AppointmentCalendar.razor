@@ -1,7 +1,11 @@
 @page "/appointments/calendar"
 @attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
 @rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Appointment Calendar</PageTitle>
 
@@ -16,9 +20,9 @@
 
         <div class="calendar-grid-container">
             <div class="calendar-nav">
-                <button class="btn btn-icon">&lt;</button>
+                <button class="btn btn-icon" @onclick="PreviousMonth">&lt;</button>
                 <h2>@currentMonth.ToString("MMMM yyyy")</h2>
-                <button class="btn btn-icon">&gt;</button>
+                <button class="btn btn-icon" @onclick="NextMonth">&gt;</button>
             </div>
 
             <div class="calendar-grid">
@@ -57,32 +61,65 @@
 @code {
     private DateTime currentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
     private int startOffset;
+    private string? token;
     
-    // Mock data since no GET endpoint exists for fetching appointments by month
-    private List<AppointmentMock> mockAppointments = new();
+    private List<AppointmentSummaryResponse> appointments = new();
 
     protected override void OnInitialized()
     {
         startOffset = (int)currentMonth.DayOfWeek;
-        
-        // Seed mock appointments
-        mockAppointments.Add(new AppointmentMock { AppointmentType = "Cardiology", ScheduledDateTime = DateTime.Today.AddDays(2).AddHours(10) });
-        mockAppointments.Add(new AppointmentMock { AppointmentType = "Dermatology", ScheduledDateTime = DateTime.Today.AddDays(5).AddHours(14) });
     }
 
-    private IEnumerable<AppointmentMock> GetAppointmentsForDate(DateTime date)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        return mockAppointments.Where(a => a.ScheduledDateTime.Date == date.Date);
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadAppointmentsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAppointmentsAsync()
+    {
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await http.GetAsync("api/v1/Appointments");
+            if (response.IsSuccessStatusCode)
+            {
+                var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+                appointments = await response.Content.ReadFromJsonAsync<List<AppointmentSummaryResponse>>(options) ?? new();
+            }
+        }
+        catch
+        {
+            // Ignore error
+        }
+    }
+
+    private IEnumerable<AppointmentSummaryResponse> GetAppointmentsForDate(DateTime date)
+    {
+        return appointments.Where(a => a.ScheduledDateTime.Date == date.Date);
     }
 
     private void GoToManager()
     {
         Navigation.NavigateTo("/appointments/manager");
     }
-
-    public class AppointmentMock
+    
+    private void PreviousMonth()
     {
-        public string AppointmentType { get; set; } = string.Empty;
-        public DateTime ScheduledDateTime { get; set; }
+        currentMonth = currentMonth.AddMonths(-1);
+        startOffset = (int)currentMonth.DayOfWeek;
+    }
+    
+    private void NextMonth()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        startOffset = (int)currentMonth.DayOfWeek;
     }
 }

@@ -1,0 +1,195 @@
+@page "/admin/users"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Admin
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Admin - Users</PageTitle>
+
+<section class="admin-page">
+    <div class="admin-panel">
+        <div class="admin-header">
+            <button class="btn btn-secondary back-btn" @onclick='() => Navigation.NavigateTo("/admin/dashboard")'>&larr; Back to Dashboard</button>
+            <h1>User Management</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <p>Loading users...</p>
+        }
+        else if (users?.Count > 0)
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Joined</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in users)
+                    {
+                        <tr>
+                            <td>@user.FullName</td>
+                            <td>@user.Email</td>
+                            <td><span class="badge badge-@user.Role.ToLower()">@user.Role</span></td>
+                            <td>@user.CreatedDate.ToString("yyyy-MM-dd")</td>
+                            <td>
+                                @if (user.IsSuspended)
+                                {
+                                    <span class="badge badge-suspended">Suspended</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-active">Active</span>
+                                }
+                            </td>
+                            <td>
+                                @if (user.Role != "Admin")
+                                {
+                                    <button class="btn @(user.IsSuspended ? "btn-success" : "btn-warning") btn-sm" 
+                                            @onclick="() => ToggleSuspensionAsync(user.UserId)">
+                                        @(user.IsSuspended ? "Reactivate" : "Suspend")
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" @onclick="() => ConfirmDeleteAsync(user.UserId)">
+                                        Delete
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No users found.</p>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private List<AdminUserOverviewDto>? users;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadUsersAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadUsersAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Admin/users");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            users = await response.Content.ReadFromJsonAsync<List<AdminUserOverviewDto>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ToggleSuspensionAsync(string userId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PutAsync($"api/v1/Admin/users/{userId}/toggle-suspension", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "User status updated successfully.";
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task ConfirmDeleteAsync(string userId)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to permanently delete this user?");
+        if (!confirmed) return;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Admin/users/{userId}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "User deleted successfully.";
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError($"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+}

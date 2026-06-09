@@ -12,7 +12,7 @@
     <div class="medicine-panel">
         <div class="medicine-header">
             <p class="eyebrow">Patient medicines</p>
-            <h1>Add medicine</h1>
+            <h1>@(editingMedicationId.HasValue ? "Edit medicine" : "Add medicine")</h1>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(statusMessage))
@@ -65,8 +65,14 @@
             </div>
 
             <button type="submit" class="btn btn-primary medicine-button" disabled="@isSaving">
-                @(isSaving ? "Saving..." : "Save medicine")
+                @(isSaving ? "Saving..." : (editingMedicationId.HasValue ? "Update medicine" : "Save medicine"))
             </button>
+            @if (editingMedicationId.HasValue)
+            {
+                <button type="button" class="btn btn-secondary medicine-button mt-2" @onclick="CancelEdit">
+                    Cancel Edit
+                </button>
+            }
         </EditForm>
 
         <div class="test-navigation">
@@ -101,6 +107,11 @@
                                 <span>@schedule.ScheduledTime.ToString("HH:mm")</span>
                             }
                         </div>
+                        
+                        <div class="medicine-actions mt-2">
+                            <button class="btn btn-sm btn-outline-primary me-2" @onclick="() => StartEdit(medicine)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => ConfirmDeactivateAsync(medicine.MedicationId)">Delete</button>
+                        </div>
                     </div>
                 }
             }
@@ -130,6 +141,8 @@
     private bool isLoading;
     private bool isSaving;
 
+    private Guid? editingMedicationId;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
@@ -142,6 +155,51 @@
         StateHasChanged();
     }
 
+    private void StartEdit(PatientMedicationResponse medicine)
+    {
+        editingMedicationId = medicine.MedicationId;
+        medicineForm.Name = medicine.DrugName;
+        medicineForm.Dosage = medicine.DosageStrength;
+        medicineForm.DosageForm = medicine.DosageForm;
+        medicineForm.FrequencyPerDay = medicine.FrequencyPerDay;
+        medicineForm.StartDate = medicine.StartDate.ToDateTime(TimeOnly.MinValue);
+        medicineForm.EndDate = medicine.EndDate?.ToDateTime(TimeOnly.MinValue);
+        
+        var firstDose = medicine.DoseSchedules.FirstOrDefault();
+        medicineForm.DoseTime = firstDose != null ? firstDose.ScheduledTime.ToString("HH:mm") : "09:00";
+    }
+
+    private void CancelEdit()
+    {
+        editingMedicationId = null;
+        ResetForm();
+    }
+
+    private async Task ConfirmDeactivateAsync(Guid medicationId)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this medication? Past records will be kept.");
+        if (!confirmed) return;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/patient/medicines/{medicationId}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Medicine deleted successfully.";
+            await LoadMedicinesAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
     private async Task AddMedicineAsync()
     {
         isSaving = true;
@@ -150,7 +208,7 @@
 
         try
         {
-            var request = new AddPatientMedicationRequest
+            var request = new UpdatePatientMedicationRequest
             {
                 DrugName = medicineForm.Name,
                 DosageStrength = medicineForm.Dosage,
@@ -162,7 +220,22 @@
             };
 
             using var http = CreateHttpClient();
-            var response = await http.PostAsJsonAsync("api/patient/medicines", request);
+            HttpResponseMessage response;
+
+            if (editingMedicationId.HasValue)
+            {
+                bool confirmed = await JS.InvokeAsync<bool>("confirm", "Updating this medication will recalculate future dose schedules. Proceed?");
+                if (!confirmed)
+                {
+                    isSaving = false;
+                    return;
+                }
+                response = await http.PutAsJsonAsync($"api/patient/medicines/{editingMedicationId.Value}", request);
+            }
+            else
+            {
+                response = await http.PostAsJsonAsync("api/patient/medicines", request);
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -170,7 +243,8 @@
                 return;
             }
 
-            statusMessage = "Medicine saved. It will appear again the next time this patient logs in.";
+            statusMessage = editingMedicationId.HasValue ? "Medicine updated." : "Medicine saved.";
+            editingMedicationId = null;
             ResetForm();
             await LoadMedicinesAsync(showLoading: false);
         }

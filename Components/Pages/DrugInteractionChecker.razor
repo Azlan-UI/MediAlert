@@ -217,7 +217,45 @@
 
     private async Task SaveReport()
     {
-        await JS.InvokeVoidAsync("window.print");
+        if (drugSearchResult == null || string.IsNullOrWhiteSpace(token)) return;
+
+        var existingMeds = medicineList?.Medicines?.Select(m => m.DrugName).ToList() ?? new List<string>();
+        
+        var worstSeverity = "Minor";
+        if (drugSearchResult.Results.Any(r => r.Warnings.Any(w => w.Contains("Contraindicated", StringComparison.OrdinalIgnoreCase))))
+            worstSeverity = "Contraindicated";
+        else if (drugSearchResult.Results.Any(r => r.DrugInteractions.Any()))
+            worstSeverity = "Major";
+            
+        var explanations = drugSearchResult.Results.SelectMany(r => r.DrugInteractions.Concat(r.Warnings)).ToList();
+        var explanationText = explanations.Count > 0 ? string.Join("; ", explanations.Take(3)) : "No major warnings found.";
+
+        var request = new SaveInteractionReportRequest
+        {
+            QueryDrugName = drugSearchResult.Query,
+            ExistingDrugNames = string.Join(", ", existingMeds),
+            SeverityLevel = worstSeverity,
+            ExplanationText = explanationText
+        };
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/openfda/drugs/reports", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("alert", "Report saved successfully! You can view it in your Saved Reports.");
+            }
+            else
+            {
+                errorMessage = "Failed to save report.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to save report: " + ex.Message;
+        }
     }
 
     private HttpClient CreateHttpClient()

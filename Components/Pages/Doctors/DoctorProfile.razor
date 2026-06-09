@@ -143,19 +143,6 @@
         }
         finally
         {
-            if (doctor == null)
-            {
-                // Fallback mock if api doesn't work locally
-                doctor = new DoctorSummaryResponse
-                {
-                    DoctorId = DoctorId,
-                    FullName = "Jane Doe",
-                    Specialization = "General Practitioner",
-                    ExperienceYears = 12,
-                    IsVerified = true,
-                    RatingAverage = 4.8m
-                };
-            }
             isLoading = false;
             StateHasChanged();
         }

@@ -203,39 +203,147 @@ public class PatientMedicinesController : ControllerBase
                 .ToList(),
         };
 
+    [HttpPut("{medicationId:guid}")]
+    [ProducesResponseType(typeof(PatientMedicationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> EditMedicine(
+        Guid medicationId,
+        [FromBody] UpdatePatientMedicationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var errors = ValidateUpdateRequest(request);
+        if (errors.Count > 0)
+        {
+            return BadRequest(new PatientMedicationErrorResponse
+            {
+                Message = "Medicine could not be updated because the request is invalid.",
+                Errors = errors,
+            });
+        }
+
+        var patient = await GetOrCreateCurrentPatientAsync(cancellationToken);
+        if (patient is null) return Unauthorized();
+
+        var medication = await _dbContext.Medications
+            .Include(m => m.DoseSchedules)
+            .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
+
+        if (medication == null) return NotFound();
+
+        medication.DrugName = request.DrugName.Trim();
+        medication.DosageStrength = request.DosageStrength.Trim();
+        medication.DosageForm = request.DosageForm.Trim();
+        medication.FrequencyPerDay = request.FrequencyPerDay;
+        medication.StartDate = request.StartDate;
+        medication.EndDate = request.EndDate;
+        medication.PrescribingPhysician = request.PrescribingPhysician?.Trim();
+        medication.PharmacyName = request.PharmacyName?.Trim();
+        medication.UpdatedAt = DateTime.UtcNow;
+
+        // Soft-delete old schedules and create new ones
+        foreach (var oldSchedule in medication.DoseSchedules)
+        {
+            oldSchedule.IsActive = false;
+        }
+
+        var firstDoseTime = ParseScheduledTime(request.ScheduledTime);
+        foreach (var scheduledTime in BuildDoseTimes(firstDoseTime, request.FrequencyPerDay))
+        {
+            medication.DoseSchedules.Add(new DoseSchedule
+            {
+                DoseScheduleId = Guid.NewGuid(),
+                MedicationId = medication.MedicationId,
+                ScheduledTime = scheduledTime,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Patient {PatientId} updated medicine {MedicationId}.", patient.PatientId, medication.MedicationId);
+        return Ok(MapMedication(medication));
+    }
+
+    [HttpDelete("{medicationId:guid}")]
+    public async Task<IActionResult> DeactivateMedicine(Guid medicationId, CancellationToken cancellationToken)
+    {
+        var patient = await GetOrCreateCurrentPatientAsync(cancellationToken);
+        if (patient is null) return Unauthorized();
+
+        var medication = await _dbContext.Medications
+            .Include(m => m.DoseSchedules)
+            .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
+
+        if (medication == null) return NotFound();
+
+        medication.IsActive = false;
+        medication.UpdatedAt = DateTime.UtcNow;
+
+        foreach (var schedule in medication.DoseSchedules)
+        {
+            schedule.IsActive = false;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     private static Dictionary<string, string[]> ValidateRequest(AddPatientMedicationRequest request)
     {
         var errors = new Dictionary<string, string[]>();
 
         if (string.IsNullOrWhiteSpace(request.DrugName))
-        {
             errors[nameof(request.DrugName)] = ["Medicine name is required."];
-        }
 
         if (string.IsNullOrWhiteSpace(request.DosageStrength))
-        {
             errors[nameof(request.DosageStrength)] = ["Dosage is required."];
-        }
 
         if (request.FrequencyPerDay is < 1 or > 24)
-        {
             errors[nameof(request.FrequencyPerDay)] = ["Frequency must be between 1 and 24."];
-        }
+
+        var validForms = new[] { "Tablet", "Capsule", "Liquid", "Injection" };
+        if (!validForms.Contains(request.DosageForm, StringComparer.OrdinalIgnoreCase))
+            errors[nameof(request.DosageForm)] = ["Dosage form must be Tablet, Capsule, Liquid, or Injection."];
 
         if (request.StartDate == default)
-        {
             errors[nameof(request.StartDate)] = ["Start date is required."];
-        }
 
         if (request.EndDate is not null && request.EndDate < request.StartDate)
-        {
             errors[nameof(request.EndDate)] = ["End date must be on or after start date."];
-        }
 
         if (!TimeOnly.TryParse(request.ScheduledTime, out _))
-        {
             errors[nameof(request.ScheduledTime)] = ["Dose time must be a valid time."];
-        }
+
+        return errors;
+    }
+
+    private static Dictionary<string, string[]> ValidateUpdateRequest(UpdatePatientMedicationRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.DrugName))
+            errors[nameof(request.DrugName)] = ["Medicine name is required."];
+
+        if (string.IsNullOrWhiteSpace(request.DosageStrength))
+            errors[nameof(request.DosageStrength)] = ["Dosage is required."];
+
+        if (request.FrequencyPerDay is < 1 or > 24)
+            errors[nameof(request.FrequencyPerDay)] = ["Frequency must be between 1 and 24."];
+
+        var validForms = new[] { "Tablet", "Capsule", "Liquid", "Injection" };
+        if (!validForms.Contains(request.DosageForm, StringComparer.OrdinalIgnoreCase))
+            errors[nameof(request.DosageForm)] = ["Dosage form must be Tablet, Capsule, Liquid, or Injection."];
+
+        if (request.StartDate == default)
+            errors[nameof(request.StartDate)] = ["Start date is required."];
+
+        if (request.EndDate is not null && request.EndDate < request.StartDate)
+            errors[nameof(request.EndDate)] = ["End date must be on or after start date."];
+
+        if (!TimeOnly.TryParse(request.ScheduledTime, out _))
+            errors[nameof(request.ScheduledTime)] = ["Dose time must be a valid time."];
 
         return errors;
     }

@@ -1,6 +1,7 @@
 using MediAlert.Extensions;
 using MediAlert.Services.Billing.Interfaces;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MediAlert.Services.Billing;
 
@@ -10,11 +11,11 @@ public sealed class PremiumAccessRequirement : IAuthorizationRequirement
 
 public sealed class PremiumAccessHandler : AuthorizationHandler<PremiumAccessRequirement>
 {
-    private readonly IStripeBillingService _billingService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public PremiumAccessHandler(IStripeBillingService billingService)
+    public PremiumAccessHandler(IServiceScopeFactory scopeFactory)
     {
-        _billingService = billingService;
+        _scopeFactory = scopeFactory;
     }
 
     protected override async Task HandleRequirementAsync(
@@ -22,9 +23,15 @@ public sealed class PremiumAccessHandler : AuthorizationHandler<PremiumAccessReq
         PremiumAccessRequirement requirement)
     {
         var userId = context.User.GetUserId();
-        if (userId != Guid.Empty && await _billingService.HasPremiumAccessAsync(userId))
+        if (userId != Guid.Empty)
         {
-            context.Succeed(requirement);
+            using var scope = _scopeFactory.CreateScope();
+            var billingService = scope.ServiceProvider.GetRequiredService<IStripeBillingService>();
+            
+            if (await billingService.HasPremiumAccessAsync(userId))
+            {
+                context.Succeed(requirement);
+            }
         }
     }
 }

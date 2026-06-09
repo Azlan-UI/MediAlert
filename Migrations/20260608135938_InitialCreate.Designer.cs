@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MediAlert.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260524144727_AddComplianceReportSchema")]
-    partial class AddComplianceReportSchema
+    [Migration("20260608135938_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,30 @@ namespace MediAlert.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("MediAlert.Models.Admin", b =>
+                {
+                    b.Property<Guid>("AdminId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("AdminId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Admins_UserId");
+
+                    b.ToTable("Admins");
+                });
 
             modelBuilder.Entity("MediAlert.Models.ApplicatioUser", b =>
                 {
@@ -120,6 +144,101 @@ namespace MediAlert.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("MediAlert.Models.BillingAuditLog", b =>
+                {
+                    b.Property<Guid>("AuditId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("AuditId");
+
+                    b.HasIndex("PatientId")
+                        .HasDatabaseName("IX_BillingAuditLogs_PatientId");
+
+                    b.ToTable("BillingAuditLogs");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Caregiver", b =>
+                {
+                    b.Property<Guid>("CaregiverId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("CaregiverId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Caregivers_UserId");
+
+                    b.ToTable("Caregivers");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.CaregiverPatientLink", b =>
+                {
+                    b.Property<Guid>("CaregiverPatientLinkId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CaregiverId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("CaregiverPatientLinkId");
+
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("CaregiverId", "PatientId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CaregiverPatientLinks_Caregiver_Patient");
+
+                    b.ToTable("CaregiverPatientLinks");
+                });
+
             modelBuilder.Entity("MediAlert.Models.ComplianceReport", b =>
                 {
                     b.Property<Guid>("ComplianceReportId")
@@ -181,6 +300,165 @@ namespace MediAlert.Migrations
 
                             t.HasCheckConstraint("CK_ComplianceReports_TotalScheduledDoses_NonNegative", "\"TotalScheduledDoses\" >= 0");
                         });
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Consultation", b =>
+                {
+                    b.Property<Guid>("ConsultationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsFlagged")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ScheduledDateTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ZoomMeetingUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("ConsultationId");
+
+                    b.HasIndex("PatientId");
+
+                    b.HasIndex("DoctorId", "ScheduledDateTime")
+                        .HasDatabaseName("IX_Consultations_Doctor_ScheduledTime");
+
+                    b.ToTable("Consultations");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.ConsultationNote", b =>
+                {
+                    b.Property<Guid>("ConsultationNoteId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClinicalNotes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConsultationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Prescriptions")
+                        .HasColumnType("text");
+
+                    b.HasKey("ConsultationNoteId");
+
+                    b.HasIndex("ConsultationId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ConsultationNotes_ConsultationId");
+
+                    b.ToTable("ConsultationNotes");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Doctor", b =>
+                {
+                    b.Property<Guid>("DoctorId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("LicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Qualifications")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Specialization")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("VerificationStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("YearsOfExperience")
+                        .HasColumnType("integer");
+
+                    b.HasKey("DoctorId");
+
+                    b.HasIndex("LicenseNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Doctors_LicenseNumber");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Doctors_UserId");
+
+                    b.ToTable("Doctors");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.DoctorAvailability", b =>
+                {
+                    b.Property<Guid>("DoctorAvailabilityId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("interval");
+
+                    b.HasKey("DoctorAvailabilityId");
+
+                    b.HasIndex("DoctorId", "DayOfWeek")
+                        .HasDatabaseName("IX_DoctorAvailabilities_Doctor_DayOfWeek");
+
+                    b.ToTable("DoctorAvailabilities");
                 });
 
             modelBuilder.Entity("MediAlert.Models.DoseSchedule", b =>
@@ -274,6 +552,74 @@ namespace MediAlert.Migrations
                         {
                             t.HasCheckConstraint("CK_IntakeLogs_Status", "\"Status\" IN ('Taken', 'Skipped', 'Missed', 'Delayed')");
                         });
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Invoice", b =>
+                {
+                    b.Property<Guid>("InvoiceId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("AttemptCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HostedInvoiceUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("InvoicePdfUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("NextPaymentAttempt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("PaidDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StripeInvoiceId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("InvoiceId");
+
+                    b.HasIndex("StripeInvoiceId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Invoices_StripeInvoiceId");
+
+                    b.HasIndex("SubscriptionId")
+                        .HasDatabaseName("IX_Invoices_SubscriptionId");
+
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("MediAlert.Models.Medication", b =>
@@ -384,6 +730,123 @@ namespace MediAlert.Migrations
                         {
                             t.HasCheckConstraint("CK_Patients_ComplianceStreakDays_NonNegative", "\"ComplianceStreakDays\" >= 0");
                         });
+                });
+
+            modelBuilder.Entity("MediAlert.Models.PatientDoctorLink", b =>
+                {
+                    b.Property<Guid>("PatientDoctorLinkId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ApprovedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<Guid>("DoctorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("PatientDoctorLinkId");
+
+                    b.HasIndex("DoctorId");
+
+                    b.HasIndex("PatientId", "DoctorId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_PatientDoctorLinks_Patient_Doctor");
+
+                    b.ToTable("PatientDoctorLinks");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.ProcessedStripeEvent", b =>
+                {
+                    b.Property<string>("EventId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("ProcessedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.HasKey("EventId");
+
+                    b.ToTable("ProcessedStripeEvents");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Subscription", b =>
+                {
+                    b.Property<Guid>("SubscriptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CancelAtPeriodEnd")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateTime?>("CurrentPeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("StripePriceId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("SubscriptionId");
+
+                    b.HasIndex("PatientId")
+                        .HasDatabaseName("IX_Subscriptions_PatientId");
+
+                    b.HasIndex("StripeCustomerId")
+                        .HasDatabaseName("IX_Subscriptions_StripeCustomerId");
+
+                    b.HasIndex("StripeSubscriptionId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Subscriptions_StripeSubscriptionId");
+
+                    b.ToTable("Subscriptions");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -518,6 +981,58 @@ namespace MediAlert.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MediAlert.Models.Admin", b =>
+                {
+                    b.HasOne("MediAlert.Models.ApplicatioUser", "User")
+                        .WithOne()
+                        .HasForeignKey("MediAlert.Models.Admin", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.BillingAuditLog", b =>
+                {
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany()
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Caregiver", b =>
+                {
+                    b.HasOne("MediAlert.Models.ApplicatioUser", "User")
+                        .WithOne()
+                        .HasForeignKey("MediAlert.Models.Caregiver", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.CaregiverPatientLink", b =>
+                {
+                    b.HasOne("MediAlert.Models.Caregiver", "Caregiver")
+                        .WithMany("LinkedPatients")
+                        .HasForeignKey("CaregiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany("Caregivers")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Caregiver");
+
+                    b.Navigation("Patient");
+                });
+
             modelBuilder.Entity("MediAlert.Models.ComplianceReport", b =>
                 {
                     b.HasOne("MediAlert.Models.Patient", "Patient")
@@ -527,6 +1042,58 @@ namespace MediAlert.Migrations
                         .IsRequired();
 
                     b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Consultation", b =>
+                {
+                    b.HasOne("MediAlert.Models.Doctor", "Doctor")
+                        .WithMany("Consultations")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany("Consultations")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+
+                    b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.ConsultationNote", b =>
+                {
+                    b.HasOne("MediAlert.Models.Consultation", "Consultation")
+                        .WithOne("ConsultationNote")
+                        .HasForeignKey("MediAlert.Models.ConsultationNote", "ConsultationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Consultation");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Doctor", b =>
+                {
+                    b.HasOne("MediAlert.Models.ApplicatioUser", "User")
+                        .WithOne()
+                        .HasForeignKey("MediAlert.Models.Doctor", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.DoctorAvailability", b =>
+                {
+                    b.HasOne("MediAlert.Models.Doctor", "Doctor")
+                        .WithMany("Availabilities")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
                 });
 
             modelBuilder.Entity("MediAlert.Models.DoseSchedule", b =>
@@ -559,6 +1126,17 @@ namespace MediAlert.Migrations
                     b.Navigation("Patient");
                 });
 
+            modelBuilder.Entity("MediAlert.Models.Invoice", b =>
+                {
+                    b.HasOne("MediAlert.Models.Subscription", "Subscription")
+                        .WithMany("Invoices")
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Subscription");
+                });
+
             modelBuilder.Entity("MediAlert.Models.Medication", b =>
                 {
                     b.HasOne("MediAlert.Models.Patient", "Patient")
@@ -579,6 +1157,36 @@ namespace MediAlert.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.PatientDoctorLink", b =>
+                {
+                    b.HasOne("MediAlert.Models.Doctor", "Doctor")
+                        .WithMany("LinkedPatients")
+                        .HasForeignKey("DoctorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany("Doctors")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Doctor");
+
+                    b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Subscription", b =>
+                {
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -632,6 +1240,25 @@ namespace MediAlert.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MediAlert.Models.Caregiver", b =>
+                {
+                    b.Navigation("LinkedPatients");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Consultation", b =>
+                {
+                    b.Navigation("ConsultationNote");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Doctor", b =>
+                {
+                    b.Navigation("Availabilities");
+
+                    b.Navigation("Consultations");
+
+                    b.Navigation("LinkedPatients");
+                });
+
             modelBuilder.Entity("MediAlert.Models.DoseSchedule", b =>
                 {
                     b.Navigation("IntakeLogs");
@@ -644,11 +1271,24 @@ namespace MediAlert.Migrations
 
             modelBuilder.Entity("MediAlert.Models.Patient", b =>
                 {
+                    b.Navigation("Caregivers");
+
                     b.Navigation("ComplianceReports");
+
+                    b.Navigation("Consultations");
+
+                    b.Navigation("Doctors");
 
                     b.Navigation("IntakeLogs");
 
                     b.Navigation("Medications");
+
+                    b.Navigation("Subscriptions");
+                });
+
+            modelBuilder.Entity("MediAlert.Models.Subscription", b =>
+                {
+                    b.Navigation("Invoices");
                 });
 #pragma warning restore 612, 618
         }

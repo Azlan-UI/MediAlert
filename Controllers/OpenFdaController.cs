@@ -3,7 +3,9 @@ using MediAlert.DTOs.OpenFda;
 using MediAlert.Services.OpenFda.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Net;
+using System.Security.Claims;
 
 namespace MediAlert.Controllers;
 
@@ -14,10 +16,12 @@ namespace MediAlert.Controllers;
 public class OpenFdaController : ControllerBase
 {
     private readonly IOpenFdaDrugClient _openFdaDrugClient;
+    private readonly MediAlert.Data.ApplicationDbContext _dbContext;
 
-    public OpenFdaController(IOpenFdaDrugClient openFdaDrugClient)
+    public OpenFdaController(IOpenFdaDrugClient openFdaDrugClient, MediAlert.Data.ApplicationDbContext dbContext)
     {
         _openFdaDrugClient = openFdaDrugClient;
+        _dbContext = dbContext;
     }
 
     [HttpGet("search")]
@@ -92,5 +96,50 @@ public class OpenFdaController : ControllerBase
             _ when result.StatusCode == HttpStatusCode.NotFound => NotFound(error),
             _ => StatusCode(StatusCodes.Status502BadGateway, error),
         };
+    }
+
+    [HttpPost("reports")]
+    [Authorize(Roles = "Patient")]
+    public async Task<IActionResult> SaveReport([FromBody] SaveInteractionReportRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+
+        var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (patient == null) return Unauthorized();
+
+        var report = new MediAlert.Models.InteractionReport
+        {
+            PatientId = patient.PatientId,
+            QueryDrugName = request.QueryDrugName,
+            ExistingDrugNames = request.ExistingDrugNames,
+            SeverityLevel = request.SeverityLevel,
+            ExplanationText = request.ExplanationText,
+            GeneratedAt = DateTime.UtcNow,
+            IsSaved = true
+        };
+
+        _dbContext.InteractionReports.Add(report);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { Message = "Report saved successfully.", ReportId = report.ReportId });
+    }
+
+    [HttpGet("reports")]
+    [Authorize(Roles = "Patient")]
+    public async Task<IActionResult> GetReports(CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userId == null) return Unauthorized();
+
+        var patient = await _dbContext.Patients.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (patient == null) return Unauthorized();
+
+        var reports = await _dbContext.InteractionReports
+            .Where(r => r.PatientId == patient.PatientId && r.IsSaved)
+            .OrderByDescending(r => r.GeneratedAt)
+            .ToListAsync(cancellationToken);
+
+        return Ok(reports);
     }
 }

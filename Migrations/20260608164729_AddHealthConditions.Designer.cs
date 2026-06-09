@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MediAlert.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260602122849_ResolvePendingModelChanges")]
-    partial class ResolvePendingModelChanges
+    [Migration("20260608164729_AddHealthConditions")]
+    partial class AddHealthConditions
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -495,6 +495,43 @@ namespace MediAlert.Migrations
                         {
                             t.HasCheckConstraint("CK_DoseSchedules_DayOfWeek_Range", "\"DayOfWeek\" IS NULL OR \"DayOfWeek\" BETWEEN 0 AND 6");
                         });
+                });
+
+            modelBuilder.Entity("MediAlert.Models.HealthCondition", b =>
+                {
+                    b.Property<Guid>("ConditionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConditionName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateOnly?>("DiagnosedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("PatientId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ConditionId");
+
+                    b.HasIndex("PatientId")
+                        .HasDatabaseName("IX_HealthConditions_PatientId");
+
+                    b.ToTable("HealthConditions");
                 });
 
             modelBuilder.Entity("MediAlert.Models.IntakeLog", b =>
@@ -1107,6 +1144,17 @@ namespace MediAlert.Migrations
                     b.Navigation("Medication");
                 });
 
+            modelBuilder.Entity("MediAlert.Models.HealthCondition", b =>
+                {
+                    b.HasOne("MediAlert.Models.Patient", "Patient")
+                        .WithMany("HealthConditions")
+                        .HasForeignKey("PatientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Patient");
+                });
+
             modelBuilder.Entity("MediAlert.Models.IntakeLog", b =>
                 {
                     b.HasOne("MediAlert.Models.DoseSchedule", "DoseSchedule")
@@ -1278,6 +1326,8 @@ namespace MediAlert.Migrations
                     b.Navigation("Consultations");
 
                     b.Navigation("Doctors");
+
+                    b.Navigation("HealthConditions");
 
                     b.Navigation("IntakeLogs");
 

@@ -84,18 +84,21 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
-
-        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
-
-        if (string.IsNullOrWhiteSpace(token))
+        if (firstRender)
         {
-            Navigation.NavigateTo("/login");
-            return;
-        }
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
 
-        await LoadDashboardDataAsync();
-        StateHasChanged();
+            // Request browser notification permission (FR09)
+            await JS.InvokeVoidAsync("mediAlertNotifications.requestPermission");
+
+            await LoadDashboardDataAsync();
+            StateHasChanged();
+        }
     }
 
     private async Task LoadDashboardDataAsync()

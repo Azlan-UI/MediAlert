@@ -59,16 +59,93 @@ public sealed class AppointmentService : IAppointmentService
         return AppointmentServiceResult<AppointmentResponse>.Success(new AppointmentResponse { AppointmentId = appointment.ConsultationId, Status = appointment.Status });
     }
 
-    public Task<AppointmentServiceResult<bool>> GenerateRefillRemindersAsync(Guid patientId, CancellationToken cancellationToken = default)
+    public async Task<AppointmentServiceResult<bool>> GenerateRefillRemindersAsync(Guid patientId, CancellationToken cancellationToken = default)
     {
-        // Placeholder for refill reminder generation
-        return Task.FromResult(AppointmentServiceResult<bool>.Success(true));
+        // Simple logic: Scan active medications. If no refill reminder exists, create one.
+        var activeMeds = await _db.Medications
+            .Where(m => m.PatientId == patientId && m.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var existingReminders = await _db.RefillReminders
+            .Where(r => r.PatientId == patientId && r.Status == "Pending")
+            .Select(r => r.MedicationId)
+            .ToListAsync(cancellationToken);
+
+        var newReminders = new List<RefillReminder>();
+        foreach (var med in activeMeds)
+        {
+            if (!existingReminders.Contains(med.MedicationId))
+            {
+                newReminders.Add(new RefillReminder
+                {
+                    ReminderId = Guid.NewGuid(),
+                    PatientId = patientId,
+                    MedicationId = med.MedicationId,
+                    ReminderDate = DateTime.UtcNow.AddDays(7), // Remind in 7 days
+                    Status = "Pending",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+        }
+
+        if (newReminders.Any())
+        {
+            await _db.RefillReminders.AddRangeAsync(newReminders, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        return AppointmentServiceResult<bool>.Success(true);
     }
 
-    public Task<AppointmentServiceResult<bool>> AcknowledgeRefillReminderAsync(Guid reminderId, Guid patientId, CancellationToken cancellationToken = default)
+    public async Task<AppointmentServiceResult<bool>> AcknowledgeRefillReminderAsync(Guid reminderId, Guid patientId, CancellationToken cancellationToken = default)
     {
-        // Placeholder for acknowledging refill reminder
-        return Task.FromResult(AppointmentServiceResult<bool>.Success(true));
+        var reminder = await _db.RefillReminders.FirstOrDefaultAsync(r => r.ReminderId == reminderId && r.PatientId == patientId, cancellationToken);
+        if (reminder == null) return AppointmentServiceResult<bool>.Failure("RefillError", "Reminder not found.", StatusCodes.Status404NotFound);
+
+        reminder.Status = "Acknowledged";
+        await _db.SaveChangesAsync(cancellationToken);
+        return AppointmentServiceResult<bool>.Success(true);
+    }
+
+    public async Task<AppointmentServiceResult<List<RefillReminderDto>>> GetPatientRefillsAsync(Guid patientId, CancellationToken cancellationToken = default)
+    {
+        var refills = await _db.RefillReminders
+            .Include(r => r.Medication)
+            .Where(r => r.PatientId == patientId)
+            .OrderByDescending(r => r.ReminderDate)
+            .Select(r => new RefillReminderDto
+            {
+                ReminderId = r.ReminderId,
+                MedicationName = r.Medication.DrugName,
+                ReminderDate = r.ReminderDate,
+                Status = r.Status
+            })
+            .ToListAsync(cancellationToken);
+
+        return AppointmentServiceResult<List<RefillReminderDto>>.Success(refills);
+    }
+
+    public async Task<AppointmentServiceResult<bool>> SaveConsultationNoteAsync(Guid appointmentId, string notes, CancellationToken cancellationToken = default)
+    {
+        var existingNote = await _db.ConsultationNotes.FirstOrDefaultAsync(n => n.ConsultationId == appointmentId, cancellationToken);
+        
+        if (existingNote != null)
+        {
+            existingNote.ClinicalNotes = notes;
+        }
+        else
+        {
+            await _db.ConsultationNotes.AddAsync(new ConsultationNote
+            {
+                ConsultationNoteId = Guid.NewGuid(),
+                ConsultationId = appointmentId,
+                ClinicalNotes = notes,
+                CreatedAt = DateTime.UtcNow
+            }, cancellationToken);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return AppointmentServiceResult<bool>.Success(true);
     }
 
     public async Task<AppointmentServiceResult<List<AppointmentSummaryResponse>>> GetPatientAppointmentsAsync(Guid patientId, CancellationToken cancellationToken = default)

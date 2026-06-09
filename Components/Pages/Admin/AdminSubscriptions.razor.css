@@ -1,0 +1,49 @@
+.admin-page {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+    min-height: calc(100vh - 60px);
+    background-color: #f1f5f9;
+}
+
+.admin-panel {
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    max-width: 1000px;
+    padding: 2.5rem;
+}
+
+.admin-header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+}
+
+.back-btn {
+    margin-bottom: 1rem;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    border-radius: 4px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+}
+
+.back-btn:hover { background: #f8fafc; }
+
+h1 { color: #0f172a; font-size: 2rem; margin: 0; }
+
+.status-box { padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; }
+.status-success { background: #dcfce7; color: #166534; }
+.status-error { background: #fee2e2; color: #991b1b; }
+
+.data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.data-table th, .data-table td { padding: 1rem; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.data-table th { background: #f8fafc; color: #475569; font-weight: 600; }
+
+.badge { padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+.badge-active { background: #dcfce7; color: #166534; }
+.badge-suspended { background: #fee2e2; color: #991b1b; }

@@ -1,12 +1,41 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "E:\\MediAlert\\MediAlert\\",
-  "Documents": [],
+  "WorkspaceRootPath": "C:\\Users\\STS\\Desktop\\MediAlert\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{728E7638-5DC0-20E7-BD6B-4CAC08BE172A}|MediAlert.csproj|c:\\users\\sts\\desktop\\medialert\\services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{728E7638-5DC0-20E7-BD6B-4CAC08BE172A}|MediAlert.csproj|solutionrelative:services\\auth\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "AuthService.cs",
+              "DocumentMoniker": "C:\\Users\\STS\\Desktop\\MediAlert\\Services\\Auth\\AuthService.cs",
+              "RelativeDocumentMoniker": "Services\\Auth\\AuthService.cs",
+              "ToolTip": "C:\\Users\\STS\\Desktop\\MediAlert\\Services\\Auth\\AuthService.cs",
+              "RelativeToolTip": "Services\\Auth\\AuthService.cs",
+              "ViewState": "AgIAAEEAAAAAAAAAAAAlwFIAAAA9AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-06-09T08:19:33.085Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }

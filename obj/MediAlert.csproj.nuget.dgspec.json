@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "E:\\MediAlert\\MediAlert\\MediAlert.csproj": {}
+    "C:\\Users\\STS\\Desktop\\MediAlert\\MediAlert.csproj": {}
   },
   "projects": {
-    "E:\\MediAlert\\MediAlert\\MediAlert.csproj": {
+    "C:\\Users\\STS\\Desktop\\MediAlert\\MediAlert.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "E:\\MediAlert\\MediAlert\\MediAlert.csproj",
+        "projectUniqueName": "C:\\Users\\STS\\Desktop\\MediAlert\\MediAlert.csproj",
         "projectName": "MediAlert",
-        "projectPath": "E:\\MediAlert\\MediAlert\\MediAlert.csproj",
-        "packagesPath": "C:\\Users\\azlan\\.nuget\\packages\\",
-        "outputPath": "E:\\MediAlert\\MediAlert\\obj\\",
+        "projectPath": "C:\\Users\\STS\\Desktop\\MediAlert\\MediAlert.csproj",
+        "packagesPath": "C:\\Users\\STS\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\STS\\Desktop\\MediAlert\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\azlan\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\STS\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -26,6 +26,7 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {

@@ -18,4 +18,5 @@ public class Patient
     public ICollection<PatientDoctorLink> Doctors { get; set; } = [];
     public ICollection<Consultation> Consultations { get; set; } = [];
     public ICollection<Subscription> Subscriptions { get; set; } = [];
+    public ICollection<HealthCondition> HealthConditions { get; set; } = [];
 }

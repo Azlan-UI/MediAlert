@@ -1,0 +1,137 @@
+/* CSS for SignUp.razor */
+
+.signup-shell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f0f4f8 0%, #e1e8ed 100%);
+    padding: 2rem;
+}
+
+.signup-panel {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    padding: 3rem;
+    width: 100%;
+    max-width: 480px;
+    animation: slideUp 0.5s ease-out forwards;
+}
+
+.signup-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.signup-header .eyebrow {
+    color: #1b6ec2;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.signup-header h1 {
+    color: #2c3e50;
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.signup-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.field-group label {
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.9rem;
+}
+
+.form-control {
+    padding: 0.75rem 1rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus {
+    border-color: #1b6ec2;
+    box-shadow: 0 0 0 3px rgba(27, 110, 194, 0.2);
+    outline: none;
+}
+
+.signup-error {
+    background-color: #fff5f5;
+    color: #e53e3e;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border-left: 4px solid #e53e3e;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.signup-button {
+    margin-top: 1rem;
+    padding: 0.875rem;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: 6px;
+    transition: transform 0.1s, background-color 0.2s;
+    background-color: #1b6ec2;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.signup-button:hover:not(:disabled) {
+    background-color: #155799;
+    transform: translateY(-1px);
+}
+
+.signup-button:disabled {
+    background-color: #a0aec0;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.signup-footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    color: #718096;
+}
+
+.signup-footer a {
+    color: #1b6ec2;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.signup-footer a:hover {
+    color: #155799;
+    text-decoration: underline;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

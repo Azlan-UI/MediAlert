@@ -29,4 +29,25 @@ public class AuthController : ControllerBase
             return Unauthorized(new AuthErrorResponse { Message = ex.Message });
         }
     }
+
+    [HttpPost("register")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            await _authService.RegisterAsync(request);
+            return Ok(new { Message = "Registration successful" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Conflict(new AuthErrorResponse { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new AuthErrorResponse { Message = ex.Message });
+        }
+    }
 }

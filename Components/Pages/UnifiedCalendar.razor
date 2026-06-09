@@ -1,5 +1,14 @@
 @page "/patient/calendar"
+@attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
 @rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Unified Calendar</PageTitle>
 
 <div class="container-fluid py-4">
     <div class="row mb-4 align-items-center">
@@ -10,71 +19,65 @@
         <div class="col-md-6 text-md-end">
             <div class="btn-group" role="group">
                 <button type="button" class="btn btn-outline-primary active">Week</button>
-                <button type="button" class="btn btn-outline-primary">Month</button>
             </div>
         </div>
     </div>
 
     <!-- Filters -->
     <div class="d-flex flex-wrap gap-2 mb-4">
-        <span class="badge rounded-pill bg-primary px-3 py-2" style="cursor: pointer;"><i class="bi bi-pill me-1"></i> Medications</span>
-        <span class="badge rounded-pill bg-warning text-dark px-3 py-2" style="cursor: pointer;"><i class="bi bi-exclamation-triangle me-1"></i> Refills</span>
-        <span class="badge rounded-pill bg-success px-3 py-2" style="cursor: pointer;"><i class="bi bi-stethoscope me-1"></i> Appointments</span>
-        <span class="badge rounded-pill bg-purple text-white px-3 py-2" style="cursor: pointer; background-color: #6f42c1;"><i class="bi bi-camera-video me-1"></i> Consultations</span>
+        <span class="badge rounded-pill bg-primary px-3 py-2"><i class="bi bi-pill me-1"></i> Medications</span>
+        <span class="badge rounded-pill bg-warning text-dark px-3 py-2"><i class="bi bi-exclamation-triangle me-1"></i> Refills</span>
+        <span class="badge rounded-pill bg-success px-3 py-2"><i class="bi bi-stethoscope me-1"></i> Appointments</span>
     </div>
 
-    <!-- Calendar Mock View -->
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-bordered mb-0 text-center" style="min-width: 800px;">
                     <thead class="bg-light">
                         <tr>
-                            <th class="py-3 text-muted fw-normal">Mon 12</th>
-                            <th class="py-3 text-muted fw-normal">Tue 13</th>
-                            <th class="py-3 fw-bold border-bottom border-primary border-3" style="color: #2c3e50;">Wed 14 (Today)</th>
-                            <th class="py-3 text-muted fw-normal">Thu 15</th>
-                            <th class="py-3 text-muted fw-normal">Fri 16</th>
+                            @for (int i = 0; i < 7; i++)
+                            {
+                                var d = weekStart.AddDays(i);
+                                var isToday = d.Date == DateTime.Today;
+                                <th class="py-3 @(isToday ? "fw-bold border-bottom border-primary border-3" : "text-muted fw-normal")" style="@(isToday ? "color: #2c3e50;" : "")">
+                                    @d.ToString("ddd dd") @(isToday ? "(Today)" : "")
+                                </th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <!-- Mon -->
-                            <td class="p-2 align-top" style="height: 150px; width: 20%;">
-                                <div class="bg-primary bg-opacity-10 text-primary p-2 rounded mb-2 text-start small border border-primary border-opacity-25" style="cursor: pointer;" @onclick="OpenDrawer">
-                                    <strong>8:00 AM</strong><br/>
-                                    Lisinopril 10mg
-                                </div>
-                            </td>
-                            <!-- Tue -->
-                            <td class="p-2 align-top" style="height: 150px; width: 20%;">
-                                <div class="bg-primary bg-opacity-10 text-primary p-2 rounded mb-2 text-start small border border-primary border-opacity-25" style="cursor: pointer;">
-                                    <strong>8:00 AM</strong><br/>
-                                    Lisinopril 10mg
-                                </div>
-                                <div class="bg-warning bg-opacity-10 text-dark p-2 rounded mb-2 text-start small border border-warning border-opacity-50" style="cursor: pointer;">
-                                    <strong>Refill Alert</strong><br/>
-                                    Metformin
-                                </div>
-                            </td>
-                            <!-- Wed (Today) -->
-                            <td class="p-2 align-top bg-light" style="height: 150px; width: 20%;">
-                                <div class="bg-success bg-opacity-10 text-success p-2 rounded mb-2 text-start small border border-success border-opacity-25 shadow-sm" style="cursor: pointer;">
-                                    <strong>2:00 PM</strong><br/>
-                                    Dr. Smith (Cardio)
-                                </div>
-                            </td>
-                            <!-- Thu -->
-                            <td class="p-2 align-top" style="height: 150px; width: 20%;">
-                                <div class="bg-purple bg-opacity-10 p-2 rounded mb-2 text-start small border border-opacity-25" style="cursor: pointer; color: #6f42c1; border-color: #6f42c1;">
-                                    <strong>10:30 AM</strong><br/>
-                                    Video Consult (Premium)
-                                </div>
-                            </td>
-                            <!-- Fri -->
-                            <td class="p-2 align-top" style="height: 150px; width: 20%;">
-                                
-                            </td>
+                            @for (int i = 0; i < 7; i++)
+                            {
+                                var d = weekStart.AddDays(i);
+                                <td class="p-2 align-top @(d.Date == DateTime.Today ? "bg-light" : "")" style="height: 150px; width: 14.28%;">
+                                    @foreach (var evt in GetEventsForDate(d))
+                                    {
+                                        if (evt.Type == EventType.Medication)
+                                        {
+                                            <div class="bg-primary bg-opacity-10 text-primary p-2 rounded mb-2 text-start small border border-primary border-opacity-25" style="cursor: pointer;" @onclick="() => OpenDrawer(evt)">
+                                                <strong>@evt.Time.ToString("hh:mm tt")</strong><br/>
+                                                @evt.Title
+                                            </div>
+                                        }
+                                        else if (evt.Type == EventType.Refill)
+                                        {
+                                            <div class="bg-warning bg-opacity-10 text-dark p-2 rounded mb-2 text-start small border border-warning border-opacity-50" style="cursor: pointer;" @onclick="() => OpenDrawer(evt)">
+                                                <strong>Refill Alert</strong><br/>
+                                                @evt.Title
+                                            </div>
+                                        }
+                                        else if (evt.Type == EventType.Appointment)
+                                        {
+                                            <div class="bg-success bg-opacity-10 text-success p-2 rounded mb-2 text-start small border border-success border-opacity-25 shadow-sm" style="cursor: pointer;" @onclick="() => OpenDrawer(evt)">
+                                                <strong>@evt.Time.ToString("hh:mm tt")</strong><br/>
+                                                @evt.Title
+                                            </div>
+                                        }
+                                    }
+                                </td>
+                            }
                         </tr>
                     </tbody>
                 </table>
@@ -82,8 +85,8 @@
         </div>
     </div>
 
-    <!-- Side Drawer Mock (Hidden by default, toggled via state) -->
-    @if (isDrawerOpen)
+    <!-- Side Drawer -->
+    @if (selectedEvent != null)
     {
         <div class="position-fixed top-0 end-0 h-100 bg-white shadow-lg p-4" style="width: 400px; z-index: 1050; transition: transform 0.3s ease-in-out;">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -92,38 +95,169 @@
             </div>
             
             <div class="mb-4">
-                <span class="badge bg-primary mb-2">MEDICATION</span>
-                <h4>Lisinopril 10mg</h4>
-                <p class="text-muted"><i class="bi bi-clock me-2"></i>Scheduled for 8:00 AM</p>
-            </div>
-
-            <div class="alert alert-info border-0 bg-primary bg-opacity-10 text-primary">
-                <i class="bi bi-info-circle me-2"></i> Take with food or water.
+                @if (selectedEvent.Type == EventType.Medication)
+                {
+                    <span class="badge bg-primary mb-2">MEDICATION</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-clock me-2"></i>Scheduled for @selectedEvent.Time.ToString("hh:mm tt")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/patient/compliance-test")'>Log Intake</button>
+                    </div>
+                }
+                else if (selectedEvent.Type == EventType.Appointment)
+                {
+                    <span class="badge bg-success mb-2">APPOINTMENT</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-clock me-2"></i>Scheduled for @selectedEvent.Time.ToString("f")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/consultations")'>View Consultation</button>
+                    </div>
+                }
+                else if (selectedEvent.Type == EventType.Refill)
+                {
+                    <span class="badge bg-warning text-dark mb-2">REFILL</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-calendar me-2"></i>Due by @selectedEvent.Time.ToString("d")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/appointments/refills")'>Manage Refills</button>
+                    </div>
+                }
             </div>
 
             <div class="d-grid gap-2 mt-4">
-                <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/patient/compliance-test")'>Log Intake</button>
                 <button class="btn btn-outline-secondary rounded-pill py-2" @onclick="CloseDrawer">Close</button>
             </div>
         </div>
         
-        <!-- Backdrop -->
         <div class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" style="z-index: 1040;" @onclick="CloseDrawer"></div>
     }
 </div>
 
 @code {
-    [Inject] private NavigationManager Navigation { get; set; } = default!;
+    private string? token;
+    private DateTime weekStart;
+    private List<CalendarEvent> allEvents = new();
+    private CalendarEvent? selectedEvent;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private bool isDrawerOpen = false;
-
-    private void OpenDrawer()
+    protected override void OnInitialized()
     {
-        isDrawerOpen = true;
+        var today = DateTime.Today;
+        var diff = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
+        weekStart = today.AddDays(-1 * diff).Date;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Load Medications
+            var medRes = await http.GetAsync("api/patient/medicines");
+            if (medRes.IsSuccessStatusCode)
+            {
+                var medsData = await medRes.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+                if (medsData?.Medicines != null)
+                {
+                    foreach (var med in medsData.Medicines)
+                    {
+                        foreach (var ds in med.DoseSchedules)
+                        {
+                            // Expand for the 7 days of the week view
+                            for (int i = 0; i < 7; i++)
+                            {
+                                var d = weekStart.AddDays(i);
+                                if (d >= med.StartDate.ToDateTime(TimeOnly.MinValue) && (!med.EndDate.HasValue || d <= med.EndDate.Value.ToDateTime(TimeOnly.MaxValue)))
+                                {
+                                    allEvents.Add(new CalendarEvent
+                                    {
+                                        Type = EventType.Medication,
+                                        Title = $"{med.DrugName} {med.DosageStrength}",
+                                        Time = d.Add(ds.ScheduledTime.ToTimeSpan())
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Load Appointments
+            var apptRes = await http.GetAsync("api/v1/Appointments");
+            if (apptRes.IsSuccessStatusCode)
+            {
+                var appts = await apptRes.Content.ReadFromJsonAsync<List<AppointmentSummaryResponse>>(JsonOptions) ?? new();
+                foreach (var a in appts)
+                {
+                    allEvents.Add(new CalendarEvent
+                    {
+                        Type = EventType.Appointment,
+                        Title = a.AppointmentType,
+                        Time = a.ScheduledDateTime
+                    });
+                }
+            }
+
+            // Load Refills
+            var refillRes = await http.GetAsync("api/v1/Appointments/refills");
+            if (refillRes.IsSuccessStatusCode)
+            {
+                var refills = await refillRes.Content.ReadFromJsonAsync<List<RefillReminderDto>>(JsonOptions) ?? new();
+                foreach (var r in refills.Where(r => r.Status == "Pending"))
+                {
+                    allEvents.Add(new CalendarEvent
+                    {
+                        Type = EventType.Refill,
+                        Title = r.MedicationName,
+                        Time = r.ReminderDate
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
+    private IEnumerable<CalendarEvent> GetEventsForDate(DateTime date)
+    {
+        return allEvents
+            .Where(e => e.Time.Date == date.Date)
+            .OrderBy(e => e.Time);
+    }
+
+    private void OpenDrawer(CalendarEvent evt)
+    {
+        selectedEvent = evt;
     }
 
     private void CloseDrawer()
     {
-        isDrawerOpen = false;
+        selectedEvent = null;
+    }
+
+    public class CalendarEvent
+    {
+        public EventType Type { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public DateTime Time { get; set; }
+    }
+
+    public enum EventType
+    {
+        Medication,
+        Refill,
+        Appointment
     }
 }

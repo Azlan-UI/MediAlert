@@ -1,7 +1,10 @@
 @page "/consultations/{ConsultationId:guid}/video"
 @attribute [Authorize(Policy = MediAlert.Constants.AuthorizationPolicies.PremiumPatient)]
 @rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Video Consultation</PageTitle>
 
@@ -59,7 +62,14 @@
             <h3>Consultation Notes</h3>
         </div>
         <div class="notes-area">
-            <textarea class="notes-input" placeholder="Type your personal notes here..."></textarea>
+            <textarea class="notes-input" placeholder="Type your personal notes here..." @bind="clinicalNotes"></textarea>
+            <button class="btn btn-primary mt-2 w-100" @onclick="SaveNotes" disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Save Notes")
+            </button>
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="small mt-2 @(hasError ? "text-danger" : "text-success")">@statusMessage</div>
+            }
         </div>
     </div>
 </div>
@@ -67,6 +77,12 @@
 @code {
     [Parameter]
     public Guid ConsultationId { get; set; }
+
+    private string clinicalNotes = "";
+    private bool isSaving = false;
+    private string? statusMessage;
+    private bool hasError = false;
+    private string? token;
 
     private bool isCallActive = false;
     private bool isMuted = false;
@@ -80,6 +96,14 @@
         StateHasChanged();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        }
+    }
+
     private void ToggleMute()
     {
         isMuted = !isMuted;
@@ -90,8 +114,56 @@
         isCameraOff = !isCameraOff;
     }
 
-    private void EndCall()
+    private async Task SaveNotes()
     {
+        if (string.IsNullOrWhiteSpace(clinicalNotes))
+        {
+            statusMessage = "Please enter some notes before saving.";
+            hasError = true;
+            return;
+        }
+
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // The content string needs to be properly serialized as JSON for [FromBody] string in the controller.
+            var content = new StringContent(JsonSerializer.Serialize(clinicalNotes), System.Text.Encoding.UTF8, "application/json");
+            var response = await http.PostAsync($"api/v1/Appointments/{ConsultationId}/notes", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "Notes saved successfully.";
+            }
+            else
+            {
+                statusMessage = "Failed to save notes.";
+                hasError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = "Error: " + ex.Message;
+            hasError = true;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EndCall()
+    {
+        if (!string.IsNullOrWhiteSpace(clinicalNotes) && !isSaving)
+        {
+            await SaveNotes();
+        }
         Navigation.NavigateTo("/consultations");
     }
 }

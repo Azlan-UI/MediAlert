@@ -20,165 +20,205 @@ build_property.TargetFrameworkVersion = v10.0
 build_property.EntryPointFilePath = 
 build_property.RootNamespace = MediAlert
 build_property.RootNamespace = MediAlert
-build_property.ProjectDir = E:\MediAlert\MediAlert\
+build_property.ProjectDir = C:\Users\STS\Desktop\MediAlert\
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = 
 build_property.RazorLangVersion = 10.0
 build_property.SupportLocalizedComponentNames = 
 build_property.GenerateRazorMetadataSourceChecksumAttributes = 
-build_property.MSBuildProjectDirectory = E:\MediAlert\MediAlert
+build_property.MSBuildProjectDirectory = C:\Users\STS\Desktop\MediAlert
 build_property._RazorSourceGeneratorDebug = 
 build_property.EffectiveAnalysisLevelStyle = 10.0
 build_property.EnableCodeStyleSeverity = 
 
-[E:/MediAlert/MediAlert/Components/App.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/App.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/Counter.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Counter.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb3VudGVyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/DrugInteractionChecker.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/DrugInteractionChecker.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcnVnSW50ZXJhY3Rpb25DaGVja2VyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/Error.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Error.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xFcnJvci5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/Home.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Home.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/Login.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Login.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xMb2dpbi5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/NotFound.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/NotFound.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xOb3RGb3VuZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/UnifiedCalendar.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/PatientDashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQYXRpZW50RGFzaGJvYXJkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/SavedReports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTYXZlZFJlcG9ydHMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/UnifiedCalendar.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xVbmlmaWVkQ2FsZW5kYXIucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Pages/Weather.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Weather.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xXZWF0aGVyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Routes.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Routes.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Events/AppointmentCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Events/AppointmentCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcRXZlbnRzXEFwcG9pbnRtZW50Q2FyZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Medical/MedicationCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Medical/MedicationCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTWVkaWNhbFxNZWRpY2F0aW9uQ2FyZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Medical/RefillCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Medical/RefillCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTWVkaWNhbFxSZWZpbGxDYXJkLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Medical/UpcomingDoseCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Medical/UpcomingDoseCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTWVkaWNhbFxVcGNvbWluZ0Rvc2VDYXJkLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Network/CaregiverCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Network/CaregiverCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTmV0d29ya1xDYXJlZ2l2ZXJDYXJkLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Network/DoctorCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Network/DoctorCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcTmV0d29ya1xEb2N0b3JDYXJkLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Reports/InteractionReportCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Reports/InteractionReportCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUmVwb3J0c1xJbnRlcmFjdGlvblJlcG9ydENhcmQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Shared/Reports/ReportSummaryCard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Shared/Reports/ReportSummaryCard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUmVwb3J0c1xSZXBvcnRTdW1tYXJ5Q2FyZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/_Imports.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/_Imports.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
-[E:/MediAlert/MediAlert/Components/Layout/MainLayout.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Layout/MainLayout.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-9iwzejm88b
 
-[E:/MediAlert/MediAlert/Components/Layout/NavMenu.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Layout/NavMenu.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-usyvu98mvm
 
-[E:/MediAlert/MediAlert/Components/Layout/ReconnectModal.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Layout/ReconnectModal.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcUmVjb25uZWN0TW9kYWwucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-npyj315rej
 
-[E:/MediAlert/MediAlert/Components/Pages/Appointments/AppointmentCalendar.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Admin/AdminConsultations.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxBZG1pbkNvbnN1bHRhdGlvbnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-kaix0n6epr
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Admin/AdminDashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxBZG1pbkRhc2hib2FyZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-0ejdm04sg3
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Admin/AdminDoctors.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxBZG1pbkRvY3RvcnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-lmy6g3qw4m
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Admin/AdminSubscriptions.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxBZG1pblN1YnNjcmlwdGlvbnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-caajyoqp96
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Admin/AdminUsers.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxBZG1pblVzZXJzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-7c14sn2ld5
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Appointments/AppointmentCalendar.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBcHBvaW50bWVudHNcQXBwb2ludG1lbnRDYWxlbmRhci5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-ss5hbwq0wz
 
-[E:/MediAlert/MediAlert/Components/Pages/Appointments/AppointmentManager.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Appointments/AppointmentManager.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBcHBvaW50bWVudHNcQXBwb2ludG1lbnRNYW5hZ2VyLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-7aapiignus
 
-[E:/MediAlert/MediAlert/Components/Pages/Appointments/RefillReminders.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Appointments/RefillReminders.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBcHBvaW50bWVudHNcUmVmaWxsUmVtaW5kZXJzLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-f1ynils06m
 
-[E:/MediAlert/MediAlert/Components/Pages/Billing/BillingHistory.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Billing/BillingHistory.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xCaWxsaW5nXEJpbGxpbmdIaXN0b3J5LnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-q3j51s4z3k
 
-[E:/MediAlert/MediAlert/Components/Pages/Billing/SubscriptionDashboard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Billing/SubscriptionDashboard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xCaWxsaW5nXFN1YnNjcmlwdGlvbkRhc2hib2FyZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-789i8stnfp
 
-[E:/MediAlert/MediAlert/Components/Pages/Billing/UpgradeSubscription.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Billing/UpgradeSubscription.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xCaWxsaW5nXFVwZ3JhZGVTdWJzY3JpcHRpb24ucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-dmorgqi8d4
 
-[E:/MediAlert/MediAlert/Components/Pages/Caregiver/CaregiverDashboard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Caregiver/CaregiverDashboard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXJlZ2l2ZXJcQ2FyZWdpdmVyRGFzaGJvYXJkLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-jr3jw52pqq
 
-[E:/MediAlert/MediAlert/Components/Pages/Caregiver/PatientCaregivers.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Caregiver/PatientCaregivers.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDYXJlZ2l2ZXJcUGF0aWVudENhcmVnaXZlcnMucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-9jsspi60jb
 
-[E:/MediAlert/MediAlert/Components/Pages/ComplianceTest.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/ComplianceTest.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xDb21wbGlhbmNlVGVzdC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-yq5pnkquau
 
-[E:/MediAlert/MediAlert/Components/Pages/Doctors/ConsultationHistory.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Doctors/ConsultationHistory.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEb2N0b3JzXENvbnN1bHRhdGlvbkhpc3RvcnkucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-pw7fgkkwap
 
-[E:/MediAlert/MediAlert/Components/Pages/Doctors/DoctorProfile.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Doctors/DoctorProfile.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEb2N0b3JzXERvY3RvclByb2ZpbGUucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-jbpix87b91
 
-[E:/MediAlert/MediAlert/Components/Pages/Doctors/DoctorSearch.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Doctors/DoctorSearch.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEb2N0b3JzXERvY3RvclNlYXJjaC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-rhl3pu2p4d
 
-[E:/MediAlert/MediAlert/Components/Pages/Doctors/VideoConsultation.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Doctors/VideoConsultation.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEb2N0b3JzXFZpZGVvQ29uc3VsdGF0aW9uLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-iy1rsttu2c
 
-[E:/MediAlert/MediAlert/Components/Pages/PatientMedicines.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/HealthProfile.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIZWFsdGhQcm9maWxlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-7yn9hg9ioj
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/PatientMedicines.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQYXRpZW50TWVkaWNpbmVzLnJhem9y
 build_metadata.AdditionalFiles.CssScope = b-p0aekdfx92
 
-[E:/MediAlert/MediAlert/Components/Pages/Reports/CompliancePdfExport.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Profile.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xQcm9maWxlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-t2te2iar98
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Reports/CompliancePdfExport.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSZXBvcnRzXENvbXBsaWFuY2VQZGZFeHBvcnQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-3todps96n5
 
-[E:/MediAlert/MediAlert/Components/Pages/Reports/ReportsDashboard.razor]
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/Reports/ReportsDashboard.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xSZXBvcnRzXFJlcG9ydHNEYXNoYm9hcmQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = b-954u9z88no
+
+[C:/Users/STS/Desktop/MediAlert/Components/Pages/SignUp.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTaWduVXAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-f1v3b3kfby

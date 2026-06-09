@@ -35,6 +35,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
     public DbSet<Medication> Medications => Set<Medication>();
     public DbSet<DoseSchedule> DoseSchedules => Set<DoseSchedule>();
     public DbSet<IntakeLog> IntakeLogs => Set<IntakeLog>();
+    public DbSet<InteractionReport> InteractionReports => Set<InteractionReport>();
     public DbSet<ComplianceReport> ComplianceReports => Set<ComplianceReport>();
     public DbSet<Caregiver> Caregivers => Set<Caregiver>();
     public DbSet<Doctor> Doctors => Set<Doctor>();
@@ -48,8 +49,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<ProcessedStripeEvent> ProcessedStripeEvents => Set<ProcessedStripeEvent>();
     public DbSet<BillingAuditLog> BillingAuditLogs => Set<BillingAuditLog>();
-
-
+    public DbSet<HealthCondition> HealthConditions => Set<HealthCondition>();
+    public DbSet<RefillReminder> RefillReminders => Set<RefillReminder>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -118,6 +119,30 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
             entity.HasOne(p => p.User)
                 .WithOne()
                 .HasForeignKey<Patient>(p => p.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<HealthCondition>(entity =>
+        {
+            entity.HasKey(hc => hc.ConditionId);
+
+            entity.Property(hc => hc.ConditionName)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(hc => hc.Notes)
+                .HasMaxLength(1000);
+
+            entity.Property(hc => hc.CreatedAt)
+                .IsRequired()
+                .HasDefaultValueSql("NOW()");
+
+            entity.HasIndex(hc => hc.PatientId)
+                .HasDatabaseName("IX_HealthConditions_PatientId");
+
+            entity.HasOne(hc => hc.Patient)
+                .WithMany(p => p.HealthConditions)
+                .HasForeignKey(hc => hc.PatientId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -441,6 +466,18 @@ public class ApplicationDbContext : IdentityDbContext<ApplicatioUser>
             entity.HasIndex(a => a.PatientId).HasDatabaseName("IX_BillingAuditLogs_PatientId");
 
             entity.HasOne(a => a.Patient).WithMany().HasForeignKey(a => a.PatientId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<RefillReminder>(entity =>
+        {
+            entity.HasKey(r => r.ReminderId);
+            entity.Property(r => r.Status).IsRequired().HasMaxLength(20);
+            entity.Property(r => r.CreatedAt).IsRequired().HasDefaultValueSql("NOW()");
+
+            entity.HasIndex(r => new { r.PatientId, r.Status }).HasDatabaseName("IX_RefillReminders_Patient_Status");
+
+            entity.HasOne(r => r.Patient).WithMany().HasForeignKey(r => r.PatientId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Medication).WithMany().HasForeignKey(r => r.MedicationId).OnDelete(DeleteBehavior.Restrict);
         });
 
     }

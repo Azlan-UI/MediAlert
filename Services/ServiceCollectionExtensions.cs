@@ -34,6 +34,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPdfExportService, ComplianceReportPdfExportService>();
         services.AddScoped<IReportQueryLayer, ReportQueryLayer>();
         services.AddScoped<IStatisticsEngine, StatisticsEngine>();
+        services.AddScoped<MediAlert.Services.HealthProfile.Interfaces.IHealthProfileService, MediAlert.Services.HealthProfile.HealthProfileService>();
+        services.AddScoped<MediAlert.Services.Admin.Interfaces.IAdminService, MediAlert.Services.Admin.AdminService>();
 
         return services;
     }

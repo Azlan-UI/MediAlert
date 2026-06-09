@@ -42,19 +42,28 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var refill in mockRefills)
+                    @if (refills == null || !refills.Any())
                     {
                         <tr>
-                            <td>@refill.MedicationName</td>
-                            <td>@refill.ReminderDate.ToString("d")</td>
-                            <td><span class="badge @(refill.Status == "Pending" ? "badge-warning" : "badge-success")">@refill.Status</span></td>
-                            <td>
-                                @if (refill.Status == "Pending")
-                                {
-                                    <button class="btn btn-sm btn-primary" @onclick="() => AcknowledgeRefillAsync(refill.ReminderId)">Acknowledge</button>
-                                }
-                            </td>
+                            <td colspan="4" class="text-center text-muted">No refill reminders found.</td>
                         </tr>
+                    }
+                    else
+                    {
+                        @foreach (var refill in refills)
+                        {
+                            <tr>
+                                <td>@refill.MedicationName</td>
+                                <td>@refill.ReminderDate.ToString("d")</td>
+                                <td><span class="badge @(refill.Status == "Pending" ? "badge-warning" : "badge-success")">@refill.Status</span></td>
+                                <td>
+                                    @if (refill.Status == "Pending")
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => AcknowledgeRefillAsync(refill.ReminderId)">Acknowledge</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>
@@ -70,18 +79,32 @@
     private bool hasError;
     private bool isGenerating;
 
-    // Mock data
-    private List<RefillMock> mockRefills = new()
-    {
-        new RefillMock { ReminderId = Guid.NewGuid(), MedicationName = "Lisinopril 10mg", ReminderDate = DateTime.Today.AddDays(-1), Status = "Pending" },
-        new RefillMock { ReminderId = Guid.NewGuid(), MedicationName = "Atorvastatin 20mg", ReminderDate = DateTime.Today.AddDays(2), Status = "Pending" }
-    };
+    private List<RefillReminderDto> refills = new();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadRefillsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRefillsAsync()
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Appointments/refills");
+            if (response.IsSuccessStatusCode)
+            {
+                refills = await response.Content.ReadFromJsonAsync<List<RefillReminderDto>>(JsonOptions) ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
         }
     }
 
@@ -103,9 +126,7 @@
             }
 
             statusMessage = "Successfully checked for refills. Any new reminders have been generated.";
-            
-            // Add a mock one to show it did something
-            mockRefills.Add(new RefillMock { ReminderId = Guid.NewGuid(), MedicationName = "Metformin 500mg", ReminderDate = DateTime.Today.AddDays(7), Status = "Pending" });
+            await LoadRefillsAsync();
             StateHasChanged();
         }
         catch (Exception ex)
@@ -131,7 +152,7 @@
                 return;
             }
 
-            var item = mockRefills.FirstOrDefault(r => r.ReminderId == reminderId);
+            var item = refills.FirstOrDefault(r => r.ReminderId == reminderId);
             if (item != null)
             {
                 item.Status = "Acknowledged";
@@ -168,11 +189,5 @@
         statusMessage = message;
     }
 
-    public class RefillMock
-    {
-        public Guid ReminderId { get; set; }
-        public string MedicationName { get; set; } = string.Empty;
-        public DateTime ReminderDate { get; set; }
-        public string Status { get; set; } = string.Empty;
-    }
+
 }

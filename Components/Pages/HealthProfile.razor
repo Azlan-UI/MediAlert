@@ -1,0 +1,246 @@
+@page "/patient/health-profile"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.HealthProfile
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Health Profile</PageTitle>
+
+<section class="profile-page">
+    <div class="profile-panel">
+        <div class="profile-header">
+            <p class="eyebrow">Health Profile</p>
+            <h1>Manage Conditions</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <EditForm Model="conditionForm" OnValidSubmit="AddConditionAsync" class="profile-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="conditionName">Condition Name</label>
+                <InputText id="conditionName" class="form-control" @bind-Value="conditionForm.ConditionName" placeholder="e.g. Type 2 Diabetes" />
+            </div>
+
+            <div class="field-row">
+                <div class="field-group">
+                    <label for="diagnosedDate">Diagnosed Date (Optional)</label>
+                    <InputDate id="diagnosedDate" class="form-control" @bind-Value="conditionForm.DiagnosedDate" />
+                </div>
+
+                <div class="field-group">
+                    <label for="notes">Notes</label>
+                    <InputText id="notes" class="form-control" @bind-Value="conditionForm.Notes" placeholder="Additional details..." />
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary profile-button" disabled="@isSaving">
+                @(isSaving ? "Saving..." : "Add Condition")
+            </button>
+        </EditForm>
+
+        <div class="profile-list">
+            <h2>Your Health Conditions</h2>
+
+            @if (isLoading)
+            {
+                <p>Loading conditions...</p>
+            }
+            else if (conditions?.Count > 0)
+            {
+                @foreach (var condition in conditions)
+                {
+                    <div class="profile-item">
+                        <div class="profile-item-details">
+                            <strong>@condition.ConditionName</strong>
+                            @if (condition.DiagnosedDate.HasValue)
+                            {
+                                <span class="diagnosed-date">Diagnosed: @condition.DiagnosedDate.Value.ToString("yyyy-MM-dd")</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(condition.Notes))
+                            {
+                                <p class="condition-notes">@condition.Notes</p>
+                            }
+                        </div>
+                        <div class="profile-actions">
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="() => DeleteConditionAsync(condition.ConditionId)">Delete</button>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p>No health conditions logged.</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly ConditionForm conditionForm = new();
+    private List<HealthConditionDto>? conditions;
+
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isSaving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadConditionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadConditionsAsync(bool showLoading = true)
+    {
+        if (showLoading) isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                ShowError("No patient token found. Please log in again.");
+                return;
+            }
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/HealthProfile");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            conditions = await response.Content.ReadFromJsonAsync<List<HealthConditionDto>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddConditionAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            var request = new CreateHealthConditionRequest
+            {
+                ConditionName = conditionForm.ConditionName,
+                DiagnosedDate = conditionForm.DiagnosedDate.HasValue ? DateOnly.FromDateTime(conditionForm.DiagnosedDate.Value) : null,
+                Notes = conditionForm.Notes
+            };
+
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/v1/HealthProfile", request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Condition saved successfully.";
+            ResetForm();
+            await LoadConditionsAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteConditionAsync(Guid conditionId)
+    {
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/HealthProfile/{conditionId}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Condition deleted.";
+            await LoadConditionsAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError($"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private void ResetForm()
+    {
+        conditionForm.ConditionName = string.Empty;
+        conditionForm.DiagnosedDate = null;
+        conditionForm.Notes = string.Empty;
+    }
+
+    private sealed class ConditionForm
+    {
+        public string ConditionName { get; set; } = string.Empty;
+        public DateTime? DiagnosedDate { get; set; }
+        public string? Notes { get; set; }
+    }
+}
