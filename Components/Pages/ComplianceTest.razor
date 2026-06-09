@@ -290,17 +290,7 @@
             }
         </div>
 
-        <div class="test-section">
-            <h2>Error testing</h2>
-            <button type="button" class="btn btn-secondary" @onclick="SendInvalidReportAsync" disabled="@isTestingError">
-                Send invalid report request
-            </button>
 
-            @if (!string.IsNullOrWhiteSpace(errorTestMessage))
-            {
-                <div class="result-block status-error">@errorTestMessage</div>
-            }
-        </div>
     </div>
 </section>
 
@@ -309,14 +299,14 @@
 
     private string? token;
     private string? pageMessage;
-    private string? errorTestMessage;
+
     private bool hasError;
     private bool isLoadingMedicines;
     private bool isSearchingDrug;
     private bool isRecordingIntake;
     private bool isLoadingHistory;
     private bool isGeneratingReport;
-    private bool isTestingError;
+
 
     private PatientMedicationListResponse? medicineList;
     private OpenFdaDrugSearchResponse? drugSearchResult;
@@ -543,36 +533,7 @@
         }
     }
 
-    private async Task SendInvalidReportAsync()
-    {
-        isTestingError = true;
-        errorTestMessage = null;
 
-        try
-        {
-            using var http = CreateHttpClient();
-            var response = await http.PostAsJsonAsync("api/compliance/reports/generate", new GenerateComplianceReportRequest
-            {
-                PatientId = Guid.Empty,
-                PeriodStartDate = DateOnly.FromDateTime(DateTime.Today),
-                PeriodEndDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-2)),
-                IncludeOpenFdaSafetySummary = false,
-                PersistReport = false,
-            });
-
-            errorTestMessage = response.IsSuccessStatusCode
-                ? "Unexpected success. The invalid request should have failed."
-                : await ReadErrorMessageAsync(response);
-        }
-        catch (Exception ex)
-        {
-            errorTestMessage = ex.Message;
-        }
-        finally
-        {
-            isTestingError = false;
-        }
-    }
 
     private HttpClient CreateHttpClient()
     {

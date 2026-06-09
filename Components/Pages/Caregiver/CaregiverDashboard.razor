@@ -76,9 +76,16 @@
                 
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
-                        <h3>Compliance Overview</h3>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="mb-0">Compliance Overview</h3>
+                            <select class="form-select form-select-sm w-auto" @bind="SelectedWindowDays">
+                                <option value="7">7 Days</option>
+                                <option value="14">14 Days</option>
+                                <option value="30">30 Days</option>
+                            </select>
+                        </div>
                         <p class="big-number">@dashboardData.ComplianceOverview.OverallCompliancePercentage%</p>
-                        <p>Overall Compliance</p>
+                        <p>Overall Compliance (@selectedWindowDays Days)</p>
                     </div>
 
                     <div class="dashboard-card alerts-card">
@@ -115,7 +122,12 @@
                         }
                     </div>
                 </div>
-                <button class="btn btn-secondary mt-3" @onclick="CloseDashboard">Close Dashboard</button>
+                <div class="mt-4 dashboard-actions">
+                    <button class="btn btn-primary" @onclick="RefreshDashboard">
+                        <span class="bi bi-arrow-clockwise mr-2"></span> Refresh Data
+                    </button>
+                    <button class="btn btn-secondary ml-2" @onclick="CloseDashboard">Close Dashboard</button>
+                </div>
             </div>
         }
     </div>
@@ -127,6 +139,23 @@
     private List<CaregiverPatientLinkResponse> links = [];
     private CaregiverMonitoringDashboardResponse? dashboardData;
     private Guid? selectedPatientId;
+    private int selectedWindowDays = 30;
+    
+    private int SelectedWindowDays
+    {
+        get => selectedWindowDays;
+        set
+        {
+            if (selectedWindowDays != value)
+            {
+                selectedWindowDays = value;
+                if (selectedPatientId.HasValue)
+                {
+                    _ = ViewPatientDashboard(selectedPatientId.Value);
+                }
+            }
+        }
+    }
     
     private string? token;
     private string? statusMessage;
@@ -248,7 +277,7 @@
         try
         {
             using var http = CreateHttpClient();
-            var response = await http.GetAsync($"api/v1/Caregiver/patients/{patientId}/dashboard");
+            var response = await http.GetAsync($"api/v1/Caregiver/patients/{patientId}/dashboard?windowDays={selectedWindowDays}");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -261,6 +290,14 @@
         catch (Exception ex)
         {
             ShowError(ex.Message);
+        }
+    }
+    
+    private async Task RefreshDashboard()
+    {
+        if (selectedPatientId.HasValue)
+        {
+            await ViewPatientDashboard(selectedPatientId.Value);
         }
     }
     

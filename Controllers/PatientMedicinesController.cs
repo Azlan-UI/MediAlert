@@ -207,6 +207,8 @@ public class PatientMedicinesController : ControllerBase
     [ProducesResponseType(typeof(PatientMedicationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> EditMedicine(
         Guid medicationId,
         [FromBody] UpdatePatientMedicationRequest request,
@@ -225,69 +227,162 @@ public class PatientMedicinesController : ControllerBase
         var patient = await GetOrCreateCurrentPatientAsync(cancellationToken);
         if (patient is null) return Unauthorized();
 
-        var medication = await _dbContext.Medications
-            .Include(m => m.DoseSchedules)
-            .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
-
-        if (medication == null) return NotFound();
-
-        medication.DrugName = request.DrugName.Trim();
-        medication.DosageStrength = request.DosageStrength.Trim();
-        medication.DosageForm = request.DosageForm.Trim();
-        medication.FrequencyPerDay = request.FrequencyPerDay;
-        medication.StartDate = request.StartDate;
-        medication.EndDate = request.EndDate;
-        medication.PrescribingPhysician = request.PrescribingPhysician?.Trim();
-        medication.PharmacyName = request.PharmacyName?.Trim();
-        medication.UpdatedAt = DateTime.UtcNow;
-
-        // Soft-delete old schedules and create new ones
-        foreach (var oldSchedule in medication.DoseSchedules)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            oldSchedule.IsActive = false;
-        }
+            // Clear change tracker to ensure a clean state on retry
+            _dbContext.ChangeTracker.Clear();
 
-        var firstDoseTime = ParseScheduledTime(request.ScheduledTime);
-        foreach (var scheduledTime in BuildDoseTimes(firstDoseTime, request.FrequencyPerDay))
-        {
-            medication.DoseSchedules.Add(new DoseSchedule
+            var medication = await _dbContext.Medications
+                .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
+
+            if (medication == null) return NotFound();
+
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            medication.DrugName = request.DrugName.Trim();
+            medication.DosageStrength = request.DosageStrength.Trim();
+            medication.DosageForm = request.DosageForm.Trim();
+            medication.FrequencyPerDay = request.FrequencyPerDay;
+            medication.StartDate = request.StartDate;
+            medication.EndDate = request.EndDate;
+            medication.PrescribingPhysician = request.PrescribingPhysician?.Trim();
+            medication.PharmacyName = request.PharmacyName?.Trim();
+            medication.UpdatedAt = DateTime.UtcNow;
+
+            // Soft-delete old schedules directly in the database
+            await _dbContext.DoseSchedules
+                .Where(ds => ds.MedicationId == medicationId && ds.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.IsActive, false), cancellationToken);
+
+            var firstDoseTime = ParseScheduledTime(request.ScheduledTime);
+            medication.DoseSchedules = new List<DoseSchedule>(); // Initialize for MapMedication
+            foreach (var scheduledTime in BuildDoseTimes(firstDoseTime, request.FrequencyPerDay))
             {
-                DoseScheduleId = Guid.NewGuid(),
-                MedicationId = medication.MedicationId,
-                ScheduledTime = scheduledTime,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-            });
-        }
+                var newSchedule = new DoseSchedule
+                {
+                    DoseScheduleId = Guid.NewGuid(),
+                    MedicationId = medication.MedicationId,
+                    ScheduledTime = scheduledTime,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                };
+                _dbContext.DoseSchedules.Add(newSchedule);
+                medication.DoseSchedules.Add(newSchedule);
+            }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency conflict updating medicine {MedicationId} for patient {PatientId}. Attempting to resolve by checking current database state.", medication.MedicationId, patient.PatientId);
 
-        _logger.LogInformation("Patient {PatientId} updated medicine {MedicationId}.", patient.PatientId, medication.MedicationId);
-        return Ok(MapMedication(medication));
+                // Log detailed conflict information for troubleshooting
+                foreach (var entry in ex.Entries)
+                {
+                    var databaseValues = await entry.GetDatabaseValuesAsync(cancellationToken);
+                    if (databaseValues == null)
+                    {
+                        _logger.LogWarning("Entity {EntityType} with key {EntityKey} was deleted in the database.", 
+                            entry.Entity.GetType().Name, 
+                            entry.Metadata.FindPrimaryKey()?.Properties.Select(p => $"{p.Name}={entry.CurrentValues[p]}"));
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Entity {EntityType} was modified. Database values differ from tracked values.", 
+                            entry.Entity.GetType().Name);
+                    }
+                }
+
+                // Verify if the medication still exists in the database
+                var existingMedication = await _dbContext.Medications
+                    .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
+
+                if (existingMedication == null)
+                {
+                    _logger.LogWarning("Medication {MedicationId} for patient {PatientId} no longer exists in the database.", medicationId, patient.PatientId);
+                    return NotFound(new PatientMedicationErrorResponse
+                    {
+                        Message = "The medicine you are trying to update was deleted by another user. Please refresh your data.",
+                        Errors = new Dictionary<string, string[]> { { "General", new[] { "Medication not found" } } }
+                    });
+                }
+
+                // Clear the change tracker to reset the context
+                _dbContext.ChangeTracker.Clear();
+
+                // Return conflict status with user-friendly message
+                return StatusCode(StatusCodes.Status409Conflict, new PatientMedicationErrorResponse
+                {
+                    Message = "The medicine was modified by another user or process. Please refresh your data and try again.",
+                    Errors = new Dictionary<string, string[]> { { "General", new[] { "Concurrency conflict detected" } } }
+                });
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "Database error occurred while updating medicine {MedicationId} for patient {PatientId}.", medication.MedicationId, patient.PatientId);
+                return BadRequest(new PatientMedicationErrorResponse
+                {
+                    Message = "An error occurred while updating the medicine. Please try again.",
+                    Errors = new Dictionary<string, string[]> { { "General", new[] { "Database operation failed" } } }
+                });
+            }
+
+            _logger.LogInformation("Patient {PatientId} successfully updated medicine {MedicationId} ({DrugName}).", patient.PatientId, medication.MedicationId, medication.DrugName);
+            return Ok(MapMedication(medication));
+        });
     }
 
     [HttpDelete("{medicationId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(PatientMedicationErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> DeactivateMedicine(Guid medicationId, CancellationToken cancellationToken)
     {
         var patient = await GetOrCreateCurrentPatientAsync(cancellationToken);
         if (patient is null) return Unauthorized();
 
-        var medication = await _dbContext.Medications
-            .Include(m => m.DoseSchedules)
-            .FirstOrDefaultAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
-
-        if (medication == null) return NotFound();
-
-        medication.IsActive = false;
-        medication.UpdatedAt = DateTime.UtcNow;
-
-        foreach (var schedule in medication.DoseSchedules)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            schedule.IsActive = false;
-        }
+            var medicationExists = await _dbContext.Medications
+                .AnyAsync(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId, cancellationToken);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return NoContent();
+            if (!medicationExists) return NotFound();
+
+            try
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                await _dbContext.Medications
+                    .Where(m => m.PatientId == patient.PatientId && m.MedicationId == medicationId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(m => m.IsActive, false)
+                        .SetProperty(m => m.UpdatedAt, DateTime.UtcNow), cancellationToken);
+
+                await _dbContext.DoseSchedules
+                    .Where(ds => ds.MedicationId == medicationId && ds.IsActive)
+                    .ExecuteUpdateAsync(s => s.SetProperty(d => d.IsActive, false), cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Database error deactivating medicine {MedicationId} for patient {PatientId}.", medicationId, patient.PatientId);
+                return BadRequest(new PatientMedicationErrorResponse
+                {
+                    Message = "An error occurred while deactivating the medicine. Please try again.",
+                    Errors = new Dictionary<string, string[]> { { "General", new[] { "Database operation failed" } } }
+                });
+            }
+
+            _logger.LogInformation("Patient {PatientId} successfully deactivated medicine {MedicationId}.", patient.PatientId, medicationId);
+            return NoContent();
+        });
     }
 
     private static Dictionary<string, string[]> ValidateRequest(AddPatientMedicationRequest request)
@@ -295,26 +390,26 @@ public class PatientMedicinesController : ControllerBase
         var errors = new Dictionary<string, string[]>();
 
         if (string.IsNullOrWhiteSpace(request.DrugName))
-            errors[nameof(request.DrugName)] = ["Medicine name is required."];
+            errors[nameof(request.DrugName)] = new[] { "Medicine name is required." };
 
         if (string.IsNullOrWhiteSpace(request.DosageStrength))
-            errors[nameof(request.DosageStrength)] = ["Dosage is required."];
+            errors[nameof(request.DosageStrength)] = new[] { "Dosage is required." };
 
         if (request.FrequencyPerDay is < 1 or > 24)
-            errors[nameof(request.FrequencyPerDay)] = ["Frequency must be between 1 and 24."];
+            errors[nameof(request.FrequencyPerDay)] = new[] { "Frequency must be between 1 and 24." };
 
         var validForms = new[] { "Tablet", "Capsule", "Liquid", "Injection" };
         if (!validForms.Contains(request.DosageForm, StringComparer.OrdinalIgnoreCase))
-            errors[nameof(request.DosageForm)] = ["Dosage form must be Tablet, Capsule, Liquid, or Injection."];
+            errors[nameof(request.DosageForm)] = new[] { "Dosage form must be Tablet, Capsule, Liquid, or Injection." };
 
         if (request.StartDate == default)
-            errors[nameof(request.StartDate)] = ["Start date is required."];
+            errors[nameof(request.StartDate)] = new[] { "Start date is required." };
 
         if (request.EndDate is not null && request.EndDate < request.StartDate)
-            errors[nameof(request.EndDate)] = ["End date must be on or after start date."];
+            errors[nameof(request.EndDate)] = new[] { "End date must be on or after start date." };
 
         if (!TimeOnly.TryParse(request.ScheduledTime, out _))
-            errors[nameof(request.ScheduledTime)] = ["Dose time must be a valid time."];
+            errors[nameof(request.ScheduledTime)] = new[] { "Dose time must be a valid time." };
 
         return errors;
     }
@@ -324,26 +419,26 @@ public class PatientMedicinesController : ControllerBase
         var errors = new Dictionary<string, string[]>();
 
         if (string.IsNullOrWhiteSpace(request.DrugName))
-            errors[nameof(request.DrugName)] = ["Medicine name is required."];
+            errors[nameof(request.DrugName)] = new[] { "Medicine name is required." };
 
         if (string.IsNullOrWhiteSpace(request.DosageStrength))
-            errors[nameof(request.DosageStrength)] = ["Dosage is required."];
+            errors[nameof(request.DosageStrength)] = new[] { "Dosage is required." };
 
         if (request.FrequencyPerDay is < 1 or > 24)
-            errors[nameof(request.FrequencyPerDay)] = ["Frequency must be between 1 and 24."];
+            errors[nameof(request.FrequencyPerDay)] = new[] { "Frequency must be between 1 and 24." };
 
         var validForms = new[] { "Tablet", "Capsule", "Liquid", "Injection" };
         if (!validForms.Contains(request.DosageForm, StringComparer.OrdinalIgnoreCase))
-            errors[nameof(request.DosageForm)] = ["Dosage form must be Tablet, Capsule, Liquid, or Injection."];
+            errors[nameof(request.DosageForm)] = new[] { "Dosage form must be Tablet, Capsule, Liquid, or Injection." };
 
         if (request.StartDate == default)
-            errors[nameof(request.StartDate)] = ["Start date is required."];
+            errors[nameof(request.StartDate)] = new[] { "Start date is required." };
 
         if (request.EndDate is not null && request.EndDate < request.StartDate)
-            errors[nameof(request.EndDate)] = ["End date must be on or after start date."];
+            errors[nameof(request.EndDate)] = new[] { "End date must be on or after start date." };
 
         if (!TimeOnly.TryParse(request.ScheduledTime, out _))
-            errors[nameof(request.ScheduledTime)] = ["Dose time must be a valid time."];
+            errors[nameof(request.ScheduledTime)] = new[] { "Dose time must be a valid time." };
 
         return errors;
     }

@@ -56,7 +56,7 @@ public sealed class CaregiverService : ICaregiverService
         // Resolve patient
         var patient = await _db.Patients
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.PatientId == patientId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.UserId == patientId.ToString(), cancellationToken);
 
         if (patient is null)
             return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
@@ -103,7 +103,7 @@ public sealed class CaregiverService : ICaregiverService
         {
             CaregiverPatientLinkId = Guid.NewGuid(),
             CaregiverId            = caregiver.CaregiverId,
-            PatientId              = patientId,
+            PatientId              = patient.PatientId,
             Status                 = LinkStatuses.Pending,
             CreatedAt              = DateTime.UtcNow,
         };
@@ -151,8 +151,15 @@ public sealed class CaregiverService : ICaregiverService
                 "Link request was not found.",
                 StatusCodes.Status404NotFound);
 
+        var caregiver = await _db.Caregivers.FirstOrDefaultAsync(c => c.UserId == caregiverId.ToString(), cancellationToken);
+        if (caregiver is null)
+            return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
+                CaregiverErrorCodes.CaregiverNotFound,
+                "Caregiver profile was not found.",
+                StatusCodes.Status404NotFound);
+
         // FR-15: Only the targeted caregiver may approve
-        if (link.CaregiverId != caregiverId)
+        if (link.CaregiverId != caregiver.CaregiverId)
             return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
                 CaregiverErrorCodes.Unauthorized,
                 "You are not authorized to action this link request.",
@@ -196,7 +203,14 @@ public sealed class CaregiverService : ICaregiverService
                 "Link request was not found.",
                 StatusCodes.Status404NotFound);
 
-        if (link.CaregiverId != caregiverId)
+        var caregiver = await _db.Caregivers.FirstOrDefaultAsync(c => c.UserId == caregiverId.ToString(), cancellationToken);
+        if (caregiver is null)
+            return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
+                CaregiverErrorCodes.CaregiverNotFound,
+                "Caregiver profile was not found.",
+                StatusCodes.Status404NotFound);
+
+        if (link.CaregiverId != caregiver.CaregiverId)
             return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
                 CaregiverErrorCodes.Unauthorized,
                 "You are not authorized to action this link request.",
@@ -240,8 +254,8 @@ public sealed class CaregiverService : ICaregiverService
                 StatusCodes.Status404NotFound);
 
         // Only the patient or caregiver on this specific link may revoke
-        bool isPatient    = link.PatientId    == requestingUserId;
-        bool isCaregiver  = link.CaregiverId  == requestingUserId;
+        bool isPatient    = link.Patient?.UserId    == requestingUserId.ToString();
+        bool isCaregiver  = link.Caregiver?.UserId  == requestingUserId.ToString();
 
         if (!isPatient && !isCaregiver)
             return CaregiverServiceResult<CaregiverPatientLinkResponse>.Failure(
@@ -280,7 +294,7 @@ public sealed class CaregiverService : ICaregiverService
                 .ThenInclude(p => p.User)
             .Include(l => l.Caregiver)
                 .ThenInclude(c => c.User)
-            .Where(l => l.CaregiverId == caregiverId)
+            .Where(l => l.Caregiver.UserId == caregiverId.ToString())
             .OrderByDescending(l => l.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -302,7 +316,7 @@ public sealed class CaregiverService : ICaregiverService
                 .ThenInclude(p => p.User)
             .Include(l => l.Caregiver)
                 .ThenInclude(c => c.User)
-            .Where(l => l.PatientId == patientId)
+            .Where(l => l.Patient.UserId == patientId.ToString())
             .OrderByDescending(l => l.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -322,9 +336,10 @@ public sealed class CaregiverService : ICaregiverService
     {
         // FR-16: Access blocked without an Approved link
         var link = await _db.CaregiverPatientLinks
+            .Include(l => l.Caregiver)
             .AsNoTracking()
             .FirstOrDefaultAsync(l =>
-                l.CaregiverId == caregiverId &&
+                l.Caregiver.UserId == caregiverId.ToString() &&
                 l.PatientId   == patientId   &&
                 l.Status      == LinkStatuses.Approved,
                 cancellationToken);

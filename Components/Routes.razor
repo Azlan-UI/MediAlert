@@ -3,13 +3,11 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    <LayoutView Layout="typeof(Layout.MainLayout)">
-                        <div class="container py-5">
-                            <div class="alert alert-warning">
-                                You need an active Premium subscription to access this page.
-                            </div>
+                    <div class="container py-5">
+                        <div class="alert alert-warning">
+                            You need an active Premium subscription to access this page.
                         </div>
-                    </LayoutView>
+                    </div>
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
