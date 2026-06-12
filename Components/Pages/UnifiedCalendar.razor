@@ -1,0 +1,373 @@
+@page "/patient/calendar"
+@attribute [Authorize(Roles = "Patient")]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Unified Calendar</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h2 class="fw-bold text-dark mb-2">Unified Calendar</h2>
+            <p class="text-muted mb-0">Manage your medications, appointments, and refills in one place.</p>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <div class="bg-light p-1 rounded-pill d-inline-block">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn @(currentViewMode == CalendarViewMode.Day ? "btn-primary shadow-sm" : "btn-light text-muted border-0") rounded-pill px-4" @onclick="() => SetViewMode(CalendarViewMode.Day)">Day</button>
+                    <button type="button" class="btn @(currentViewMode == CalendarViewMode.Week ? "btn-primary shadow-sm" : "btn-light text-muted border-0") rounded-pill px-4" @onclick="() => SetViewMode(CalendarViewMode.Week)">Week</button>
+                    <button type="button" class="btn @(currentViewMode == CalendarViewMode.Month ? "btn-primary shadow-sm" : "btn-light text-muted border-0") rounded-pill px-4" @onclick="() => SetViewMode(CalendarViewMode.Month)">Month</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary-subtle px-3 py-2 fw-semibold"><i class="bi bi-pill me-1"></i> Medications</span>
+        <span class="badge rounded-pill bg-warning bg-opacity-10 text-dark border border-warning-subtle px-3 py-2 fw-semibold"><i class="bi bi-exclamation-triangle me-1"></i> Refills</span>
+        <span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success-subtle px-3 py-2 fw-semibold"><i class="bi bi-stethoscope me-1"></i> Appointments</span>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered mb-0 text-center" style="min-width: 800px; border-color: #f1f5f9;">
+                    <thead class="bg-light border-bottom">
+                        <tr>
+                            @if (currentViewMode == CalendarViewMode.Day)
+                            {
+                                var isToday = viewStartDate.Date == DateTime.Today;
+                                <th class="py-3 @(isToday ? "fw-bold" : "text-muted fw-normal")" style="@(isToday ? "color: #0d6efd; border-bottom: 3px solid #0d6efd;" : "")">
+                                    @viewStartDate.ToString("dddd, MMMM dd") @(isToday ? "(Today)" : "")
+                                </th>
+                            }
+                            else
+                            {
+                                @for (int i = 0; i < 7; i++)
+                                {
+                                    var d = viewStartDate.AddDays(i);
+                                    var isToday = d.Date == DateTime.Today;
+                                    <th class="py-3 @(isToday ? "fw-bold" : "text-muted fw-normal")" style="@(isToday ? "color: #0d6efd; border-bottom: 3px solid #0d6efd;" : "")">
+                                        @d.ToString(currentViewMode == CalendarViewMode.Week ? "ddd dd" : "dddd") @(isToday && currentViewMode == CalendarViewMode.Week ? "(Today)" : "")
+                                    </th>
+                                }
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (currentViewMode == CalendarViewMode.Day)
+                        {
+                            <tr>
+                                <td class="p-4 align-top text-start border-0" style="min-height: 400px; background-color: #f8fafc;">
+                                    @if (!GetEventsForDate(viewStartDate).Any())
+                                    {
+                                        <div class="text-center mt-5">
+                                            <i class="bi bi-calendar-x text-muted display-4 opacity-25"></i>
+                                            <p class="text-muted mt-3">No events scheduled for this day.</p>
+                                        </div>
+                                    }
+                                    @foreach (var evt in GetEventsForDate(viewStartDate))
+                                    {
+                                        <div class="@GetEventClass(evt.Type) p-3 rounded-4 mb-3 shadow-sm" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'" @onclick="() => OpenDrawer(evt)">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <strong class="text-dark">@evt.Title</strong>
+                                                <span class="badge @GetBadgeClass(evt.Type) rounded-pill">@evt.Type.ToString().ToUpper()</span>
+                                            </div>
+                                            <div class="small text-muted fw-semibold">
+                                                <i class="bi bi-clock me-1"></i>
+                                                @evt.Time.ToString(evt.Type == EventType.Refill ? "d" : "hh:mm tt")
+                                            </div>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @for (int week = 0; week < gridWeeks; week++)
+                            {
+                                <tr>
+                                    @for (int i = 0; i < 7; i++)
+                                    {
+                                        var d = viewStartDate.AddDays(week * 7 + i);
+                                        var isToday = d.Date == DateTime.Today;
+                                        var isCurrentMonth = currentViewMode == CalendarViewMode.Week || d.Month == currentDate.Month;
+                                        <td class="p-2 align-top @(isToday ? "bg-primary bg-opacity-10" : "")" style="height: 150px; width: 14.28%; opacity: @(isCurrentMonth ? "1" : "0.5"); border-color: #f1f5f9;">
+                                            @if (currentViewMode == CalendarViewMode.Month)
+                                            {
+                                                <div class="text-end mb-2 @(isToday ? "fw-bold text-primary" : "text-muted")">
+                                                    @if(isToday)
+                                                    {
+                                                        <span class="bg-primary text-white rounded-circle d-inline-flex justify-content-center align-items-center" style="width: 28px; height: 28px;">@d.Day</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @d.Day
+                                                    }
+                                                </div>
+                                            }
+                                            @foreach (var evt in GetEventsForDate(d))
+                                            {
+                                                <div class="@GetEventClass(evt.Type) p-2 rounded-3 mb-2 text-start small text-truncate shadow-sm" style="cursor: pointer; transition: transform 0.2s;" title="@evt.Title" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'" @onclick="() => OpenDrawer(evt)">
+                                                    <strong class="text-dark">@(evt.Type == EventType.Refill ? "Refill" : evt.Time.ToString("hh:mm tt"))</strong><br/>
+                                                    <span class="text-muted">@evt.Title</span>
+                                                </div>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Drawer -->
+    @if (selectedEvent != null)
+    {
+        <div class="position-fixed top-0 end-0 h-100 bg-white shadow-lg p-4" style="width: 100%; max-width: 400px; z-index: 1050; transition: transform 0.3s ease-in-out;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="fw-bold mb-0">Event Details</h5>
+                <button class="btn-close" @onclick="CloseDrawer"></button>
+            </div>
+            
+            <div class="mb-4">
+                @if (selectedEvent.Type == EventType.Medication)
+                {
+                    <span class="badge bg-primary mb-2">MEDICATION</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-clock me-2"></i>Scheduled for @selectedEvent.Time.ToString("hh:mm tt")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/patient/compliance-test")'>Log Intake</button>
+                    </div>
+                }
+                else if (selectedEvent.Type == EventType.Appointment)
+                {
+                    <span class="badge bg-success mb-2">APPOINTMENT</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-clock me-2"></i>Scheduled for @selectedEvent.Time.ToString("f")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/consultations")'>View Consultation</button>
+                    </div>
+                }
+                else if (selectedEvent.Type == EventType.Refill)
+                {
+                    <span class="badge bg-warning text-dark mb-2">REFILL</span>
+                    <h4>@selectedEvent.Title</h4>
+                    <p class="text-muted"><i class="bi bi-calendar me-2"></i>Due by @selectedEvent.Time.ToString("d")</p>
+                    <div class="d-grid gap-2 mt-4">
+                        <button class="btn btn-primary rounded-pill py-2" @onclick='() => Navigation.NavigateTo("/appointments/refills")'>Manage Refills</button>
+                    </div>
+                }
+            </div>
+
+            <div class="d-grid gap-2 mt-4">
+                <button class="btn btn-outline-secondary rounded-pill py-2" @onclick="CloseDrawer">Close</button>
+            </div>
+        </div>
+        
+        <div class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" style="z-index: 1040;" @onclick="CloseDrawer"></div>
+    }
+</div>
+
+@code {
+    private string? token;
+    private DateTime currentDate = DateTime.Today;
+    private DateTime viewStartDate;
+    private DateTime viewEndDate;
+    private int gridWeeks = 1;
+    private CalendarViewMode currentViewMode = CalendarViewMode.Week;
+    private List<CalendarEvent> allEvents = new();
+    private CalendarEvent? selectedEvent;
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    protected override void OnInitialized()
+    {
+        CalculateDateRange();
+    }
+
+    private void CalculateDateRange()
+    {
+        switch (currentViewMode)
+        {
+            case CalendarViewMode.Day:
+                viewStartDate = currentDate.Date;
+                viewEndDate = currentDate.Date;
+                gridWeeks = 1;
+                break;
+            case CalendarViewMode.Week:
+                var diff = (7 + (currentDate.DayOfWeek - DayOfWeek.Monday)) % 7;
+                viewStartDate = currentDate.AddDays(-1 * diff).Date;
+                viewEndDate = viewStartDate.AddDays(6);
+                gridWeeks = 1;
+                break;
+            case CalendarViewMode.Month:
+                var firstOfMonth = new DateTime(currentDate.Year, currentDate.Month, 1);
+                var daysInMonth = DateTime.DaysInMonth(currentDate.Year, currentDate.Month);
+                var lastOfMonth = new DateTime(currentDate.Year, currentDate.Month, daysInMonth);
+                
+                var startDiff = (7 + (firstOfMonth.DayOfWeek - DayOfWeek.Monday)) % 7;
+                viewStartDate = firstOfMonth.AddDays(-1 * startDiff).Date;
+                
+                var endDiff = (7 + (DayOfWeek.Sunday - lastOfMonth.DayOfWeek)) % 7;
+                viewEndDate = lastOfMonth.AddDays(endDiff).Date;
+                
+                gridWeeks = (int)((viewEndDate - viewStartDate).TotalDays + 1) / 7;
+                break;
+        }
+    }
+
+    private async Task SetViewMode(CalendarViewMode mode)
+    {
+        if (currentViewMode == mode) return;
+        currentViewMode = mode;
+        CalculateDateRange();
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        allEvents.Clear();
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Load Medications
+            var medRes = await http.GetAsync("api/patient/medicines");
+            if (medRes.IsSuccessStatusCode)
+            {
+                var medsData = await medRes.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+                if (medsData?.Medicines != null)
+                {
+                    foreach (var med in medsData.Medicines)
+                    {
+                        foreach (var ds in med.DoseSchedules)
+                        {
+                            var totalDays = (int)((viewEndDate - viewStartDate).TotalDays) + 1;
+                            for (int i = 0; i < totalDays; i++)
+                            {
+                                var d = viewStartDate.AddDays(i);
+                                if (d >= med.StartDate.ToDateTime(TimeOnly.MinValue) && (!med.EndDate.HasValue || d <= med.EndDate.Value.ToDateTime(TimeOnly.MaxValue)))
+                                {
+                                    allEvents.Add(new CalendarEvent
+                                    {
+                                        Type = EventType.Medication,
+                                        Title = $"{med.DrugName} {med.DosageStrength}",
+                                        Time = d.Add(ds.ScheduledTime.ToTimeSpan())
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Load Appointments
+            var apptRes = await http.GetAsync("api/v1/Appointments");
+            if (apptRes.IsSuccessStatusCode)
+            {
+                var appts = await apptRes.Content.ReadFromJsonAsync<List<AppointmentSummaryResponse>>(JsonOptions) ?? new();
+                foreach (var a in appts)
+                {
+                    allEvents.Add(new CalendarEvent
+                    {
+                        Type = EventType.Appointment,
+                        Title = a.AppointmentType,
+                        Time = a.ScheduledDateTime
+                    });
+                }
+            }
+
+            // Load Refills
+            var refillRes = await http.GetAsync("api/v1/Appointments/refills");
+            if (refillRes.IsSuccessStatusCode)
+            {
+                var refills = await refillRes.Content.ReadFromJsonAsync<List<RefillReminderDto>>(JsonOptions) ?? new();
+                foreach (var r in refills.Where(r => r.Status == "Pending"))
+                {
+                    allEvents.Add(new CalendarEvent
+                    {
+                        Type = EventType.Refill,
+                        Title = r.MedicationName,
+                        Time = r.ReminderDate
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
+    private IEnumerable<CalendarEvent> GetEventsForDate(DateTime date)
+    {
+        return allEvents
+            .Where(e => e.Time.Date == date.Date)
+            .OrderBy(e => e.Time);
+    }
+
+    private void OpenDrawer(CalendarEvent evt)
+    {
+        selectedEvent = evt;
+    }
+
+    private void CloseDrawer()
+    {
+        selectedEvent = null;
+    }
+
+    private string GetEventClass(EventType type) => type switch
+    {
+        EventType.Medication => "bg-primary bg-opacity-10 text-primary border-primary border-opacity-25",
+        EventType.Refill => "bg-warning bg-opacity-10 text-dark border-warning border-opacity-50",
+        EventType.Appointment => "bg-success bg-opacity-10 text-success border-success border-opacity-25",
+        _ => "bg-light text-dark"
+    };
+
+    private string GetBadgeClass(EventType type) => type switch
+    {
+        EventType.Medication => "bg-primary",
+        EventType.Refill => "bg-warning text-dark",
+        EventType.Appointment => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    public class CalendarEvent
+    {
+        public EventType Type { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public DateTime Time { get; set; }
+    }
+
+    public enum EventType
+    {
+        Medication,
+        Refill,
+        Appointment
+    }
+
+    public enum CalendarViewMode
+    {
+        Day,
+        Week,
+        Month
+    }
+}

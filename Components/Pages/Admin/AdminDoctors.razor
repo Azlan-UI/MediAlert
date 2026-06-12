@@ -1,0 +1,196 @@
+@page "/admin/doctors"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Admin
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Admin - Doctor Verifications</PageTitle>
+
+<section class="admin-page">
+    <div class="admin-panel">
+        <div class="admin-header">
+            <button class="btn btn-secondary back-btn" @onclick='() => Navigation.NavigateTo("/admin/dashboard")'>&larr; Back to Dashboard</button>
+            <div class="header-meta">
+                <h1>Doctor Verifications</h1>
+                <p class="subtitle">Review and approve or reject doctor applications.</p>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <div class="loading-state"><div class="spinner"></div><p>Loading doctors...</p></div>
+        }
+        else if (doctors?.Count > 0)
+        {
+            <!-- Filter tabs -->
+            <div class="filter-tabs">
+                <button class="tab @(filterStatus == null ? "active" : "")" @onclick="() => filterStatus = null">All (@doctors.Count)</button>
+                <button class="tab @(filterStatus == "Pending" ? "active" : "")" @onclick='() => filterStatus = "Pending"'>
+                    Pending (@doctors.Count(d => d.VerificationStatus == "Pending"))
+                </button>
+                <button class="tab @(filterStatus == "Verified" ? "active" : "")" @onclick='() => filterStatus = "Verified"'>
+                    Verified (@doctors.Count(d => d.VerificationStatus == "Verified"))
+                </button>
+                <button class="tab @(filterStatus == "Rejected" ? "active" : "")" @onclick='() => filterStatus = "Rejected"'>
+                    Rejected (@doctors.Count(d => d.VerificationStatus == "Rejected"))
+                </button>
+            </div>
+
+            <div class="doctor-cards">
+                @foreach (var doc in filteredDoctors)
+                {
+                    <div class="doctor-card">
+                        <div class="card-avatar">@doc.FullName.Substring(0, 1)</div>
+                        <div class="card-body">
+                            <div class="card-title">
+                                <strong>Dr. @doc.FullName</strong>
+                                <span class="badge badge-@doc.VerificationStatus.ToLower()">@doc.VerificationStatus</span>
+                            </div>
+                            <div class="card-meta">
+                                <span>📧 @doc.Email</span>
+                                <span>🏥 @doc.Specialization</span>
+                                <span>🪪 @doc.LicenseNumber</span>
+                                <span>🎓 @doc.Qualifications</span>
+                                <span>⏱️ @doc.YearsOfExperience yrs experience</span>
+                            </div>
+                            @if (doc.VerificationStatus == "Rejected" && !string.IsNullOrWhiteSpace(doc.RejectionReason))
+                            {
+                                <div class="rejection-reason">Reason: @doc.RejectionReason</div>
+                            }
+                        </div>
+                        <div class="card-actions">
+                            @if (doc.VerificationStatus != "Verified")
+                            {
+                                <button class="btn btn-success btn-sm" @onclick='() => VerifyDoctorAsync(doc.DoctorId, "Verified", null)'>✓ Approve</button>
+                            }
+                            @if (doc.VerificationStatus != "Rejected")
+                            {
+                                <button class="btn btn-danger btn-sm" @onclick="() => OpenRejectModal(doc)">✗ Reject</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="empty-state">
+                <p>No doctor registrations found.</p>
+            </div>
+        }
+    </div>
+</section>
+
+<!-- Rejection Modal -->
+@if (showRejectModal && selectedDoctor != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-box" @onclick:stopPropagation>
+            <h3>Reject Dr. @selectedDoctor.FullName?</h3>
+            <p>Please provide a reason for rejection. This will be visible to the doctor.</p>
+            <textarea class="form-control" rows="4" placeholder="Enter rejection reason..." @bind="rejectionReason"></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-danger" @onclick="ConfirmRejectAsync" disabled="@isSubmittingReject">
+                    @(isSubmittingReject ? "Rejecting..." : "Confirm Reject")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private List<AdminDoctorOverviewDto>? doctors;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private string? filterStatus;
+
+    // Modal
+    private bool showRejectModal;
+    private AdminDoctorOverviewDto? selectedDoctor;
+    private string rejectionReason = "";
+    private bool isSubmittingReject;
+
+    private IEnumerable<AdminDoctorOverviewDto> filteredDoctors =>
+        filterStatus == null ? (doctors ?? []) : (doctors?.Where(d => d.VerificationStatus == filterStatus) ?? []);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadDoctorsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadDoctorsAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        hasError = false;
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Admin/doctors");
+            if (!response.IsSuccessStatusCode) { ShowError($"Failed to load doctors ({(int)response.StatusCode})."); return; }
+            doctors = await response.Content.ReadFromJsonAsync<List<AdminDoctorOverviewDto>>(JsonOptions);
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+        finally { isLoading = false; }
+    }
+
+    private async Task VerifyDoctorAsync(Guid doctorId, string status, string? reason)
+    {
+        try
+        {
+            var req = new VerifyDoctorRequest { VerificationStatus = status, RejectionReason = reason };
+            using var http = CreateHttpClient();
+            var response = await http.PutAsJsonAsync($"api/v1/Admin/doctors/{doctorId}/verify", req);
+            if (!response.IsSuccessStatusCode) { ShowError($"Request failed ({(int)response.StatusCode})."); return; }
+            statusMessage = $"Doctor successfully {(status == "Verified" ? "approved" : "rejected")}.";
+            hasError = false;
+            await LoadDoctorsAsync();
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private void OpenRejectModal(AdminDoctorOverviewDto doc)
+    {
+        selectedDoctor = doc;
+        rejectionReason = "";
+        showRejectModal = true;
+    }
+
+    private void CloseModal() { showRejectModal = false; selectedDoctor = null; }
+
+    private async Task ConfirmRejectAsync()
+    {
+        if (string.IsNullOrWhiteSpace(rejectionReason)) { ShowError("Please enter a rejection reason."); return; }
+        isSubmittingReject = true;
+        try
+        {
+            await VerifyDoctorAsync(selectedDoctor!.DoctorId, "Rejected", rejectionReason);
+            CloseModal();
+        }
+        finally { isSubmittingReject = false; }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return http;
+    }
+
+    private void ShowError(string message) { hasError = true; statusMessage = message; }
+}

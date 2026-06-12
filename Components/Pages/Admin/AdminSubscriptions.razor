@@ -1,0 +1,135 @@
+@page "/admin/subscriptions"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Admin
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Admin - Subscriptions</PageTitle>
+
+<section class="admin-page">
+    <div class="admin-panel">
+        <div class="admin-header">
+            <button class="btn btn-secondary back-btn" @onclick='() => Navigation.NavigateTo("/admin/dashboard")'>&larr; Back to Dashboard</button>
+            <h1>Subscription Oversight</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        @if (isLoading)
+        {
+            <p>Loading subscriptions...</p>
+        }
+        else if (subscriptions?.Count > 0)
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Tier</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Cancel At End</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sub in subscriptions)
+                    {
+                        <tr>
+                            <td>@sub.PatientName</td>
+                            <td><span class="badge badge-active">@sub.Tier</span></td>
+                            <td>
+                                @if (sub.Status == "active" || sub.Status == "trialing")
+                                {
+                                    <span class="badge badge-active">@sub.Status</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-suspended">@sub.Status</span>
+                                }
+                            </td>
+                            <td>@sub.CreatedAt.ToString("yyyy-MM-dd")</td>
+                            <td>@(sub.CancelAtPeriodEnd ? "Yes" : "No")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p>No subscriptions found.</p>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private List<AdminSubscriptionOverviewDto>? subscriptions;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadSubscriptionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadSubscriptionsAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Admin/subscriptions");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            subscriptions = await response.Content.ReadFromJsonAsync<List<AdminSubscriptionOverviewDto>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError($"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+}

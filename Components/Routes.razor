@@ -1,0 +1,41 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    <div class="container d-flex align-items-center justify-content-center" style="min-height: 75vh; padding: 2rem;">
+                        <div class="lock-card text-center p-5 shadow-lg border" style="background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(16px); border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.1); max-width: 500px; width: 100%;">
+                            <div class="lock-icon-container mb-4 mx-auto d-flex align-items-center justify-content-center" style="width: 80px; height: 80px; background: rgba(234, 179, 8, 0.1); border-radius: 50%; color: #eab308; border: 2px dashed rgba(234, 179, 8, 0.3);">
+                                <i class="bi bi-lock-fill" style="font-size: 2.5rem;"></i>
+                            </div>
+                            <h2 class="fw-bold mb-2 text-white">Premium Feature Gated</h2>
+                            <p class="text-muted mb-4" style="font-size: 0.95rem;">This page is a premium benefit. Upgrade your subscription to unlock expert consults, virtual video check-ups, and platform governance tools.</p>
+                            
+                            <div class="benefits-list text-start mb-4 bg-dark bg-opacity-20 p-3 rounded-4" style="border: 1px solid rgba(255, 255, 255, 0.05);">
+                                <h6 class="text-white fw-bold mb-3 small text-uppercase" style="letter-spacing: 0.05em;">Premium Subscriber Benefits:</h6>
+                                <div class="benefit-item d-flex align-items-start mb-2" style="font-size: 0.9rem; color: #e2e8f0;">
+                                    <i class="bi bi-patch-check-fill text-success me-2 mt-1"></i>
+                                    <span>Search & schedule video consults with verified doctors</span>
+                                </div>
+                                <div class="benefit-item d-flex align-items-start mb-2" style="font-size: 0.9rem; color: #e2e8f0;">
+                                    <i class="bi bi-patch-check-fill text-success me-2 mt-1"></i>
+                                    <span>View clinical observations & medical prescriptions</span>
+                                </div>
+                                <div class="benefit-item d-flex align-items-start" style="font-size: 0.9rem; color: #e2e8f0;">
+                                    <i class="bi bi-patch-check-fill text-success me-2 mt-1"></i>
+                                    <span>Enable automatic refill notifications & tracking</span>
+                                </div>
+                            </div>
+                            
+                            <a href="/billing/upgrade" class="btn btn-warning w-100 fw-bold py-3 text-dark rounded-pill shadow-sm" style="transition: all 0.3s ease;">
+                                <i class="bi bi-lightning-charge-fill me-2"></i>Upgrade to Premium
+                            </a>
+                        </div>
+                    </div>
+                </NotAuthorized>
+
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingAuthenticationState>

@@ -1,0 +1,327 @@
+@page "/doctor/availability"
+@attribute [Authorize(Roles = "Doctor")]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Doctors
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Manage Availability</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold" style="color: #2c3e50;">Manage Availability</h2>
+            <p class="text-muted">Set up your weekly schedule for patient consultations.</p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading your schedule...</p>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
+                @statusMessage
+                <button type="button" class="btn-close" @onclick="() => statusMessage = null"></button>
+            </div>
+        }
+
+        <div class="row g-4">
+            <!-- Add Availability Form -->
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4">
+                        <h5 class="fw-bold mb-0">Add New Slot</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Type</label>
+                            <select class="form-select" @bind="slotType">
+                                <option value="recurring">Recurring (Day of Week)</option>
+                                <option value="specific">Specific Date</option>
+                            </select>
+                        </div>
+
+                        @if (slotType == "recurring")
+                        {
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Day of Week</label>
+                                <select class="form-select" @bind="newDayOfWeek">
+                                    @foreach (DayOfWeek day in Enum.GetValues(typeof(DayOfWeek)))
+                                    {
+                                        <option value="@day">@day</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Specific Date</label>
+                                <input type="date" class="form-control" @bind="newSpecificDate" />
+                            </div>
+                        }
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Start Time</label>
+                            <input type="time" class="form-control" @bind="newStartTime" />
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">End Time</label>
+                            <input type="time" class="form-control" @bind="newEndTime" />
+                        </div>
+
+                        <button class="btn btn-primary w-100 fw-semibold py-2" @onclick="AddSlotAsync" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                <span>Saving...</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-plus-circle me-2"></i><span>Add Slot</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Existing Availabilities -->
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4">
+                        <h5 class="fw-bold mb-0">Weekly Schedule</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        @if (!availabilities.Any())
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-calendar-x text-muted fs-1 mb-3"></i>
+                                <p class="text-muted">No availability slots set up yet. Add your first slot to start accepting appointments.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            var recurring = availabilities.Where(a => a.IsRecurring && a.DayOfWeek.HasValue).GroupBy(a => (DayOfWeek)a.DayOfWeek!).OrderBy(g => (int)g.Key);
+                            var specific = availabilities.Where(a => !a.IsRecurring && a.SpecificDate.HasValue).GroupBy(a => a.SpecificDate!.Value.Date).OrderBy(g => g.Key);
+                            
+                            <div class="accordion" id="scheduleAccordion">
+                                @foreach (var group in recurring)
+                                {
+                                    var dayId = group.Key.ToString();
+                                    <div class="accordion-item border-0 mb-2 shadow-sm rounded">
+                                        <h2 class="accordion-header" id="heading-@dayId">
+                                            <button class="accordion-button @(expandedGroups.Contains(dayId) ? "" : "collapsed") fw-bold rounded" type="button" @onclick="() => ToggleGroup(dayId)">
+                                                @group.Key (Recurring)
+                                                <span class="badge bg-primary ms-2 rounded-pill">@group.Count() slots</span>
+                                            </button>
+                                        </h2>
+                                        <div id="collapse-@dayId" class="accordion-collapse collapse @(expandedGroups.Contains(dayId) ? "show" : "")" aria-labelledby="heading-@dayId">
+                                            <div class="accordion-body bg-light">
+                                                <div class="list-group list-group-flush border-0">
+                                                    @foreach (var slot in group.OrderBy(s => s.StartTime))
+                                                    {
+                                                        <div class="list-group-item d-flex justify-content-between align-items-center bg-transparent border-bottom py-3">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="bi bi-clock text-primary me-3 fs-5"></i>
+                                                                <span class="fw-medium">@slot.StartTime.ToString("h:mm tt") - @slot.EndTime.ToString("h:mm tt")</span>
+                                                            </div>
+                                                            <button class="btn btn-outline-danger btn-sm rounded-circle p-2" @onclick="() => RemoveSlotAsync(slot.AvailabilityId)" title="Remove Slot">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                                @foreach (var group in specific)
+                                {
+                                    var dateId = group.Key.ToString("yyyyMMdd");
+                                    <div class="accordion-item border-0 mb-2 shadow-sm rounded">
+                                        <h2 class="accordion-header" id="heading-@dateId">
+                                            <button class="accordion-button @(expandedGroups.Contains(dateId) ? "" : "collapsed") fw-bold rounded" type="button" @onclick="() => ToggleGroup(dateId)">
+                                                @group.Key.ToString("MMM dd, yyyy")
+                                                <span class="badge bg-success ms-2 rounded-pill">@group.Count() slots</span>
+                                            </button>
+                                        </h2>
+                                        <div id="collapse-@dateId" class="accordion-collapse collapse @(expandedGroups.Contains(dateId) ? "show" : "")" aria-labelledby="heading-@dateId">
+                                            <div class="accordion-body bg-light">
+                                                <div class="list-group list-group-flush border-0">
+                                                    @foreach (var slot in group.OrderBy(s => s.StartTime))
+                                                    {
+                                                        <div class="list-group-item d-flex justify-content-between align-items-center bg-transparent border-bottom py-3">
+                                                            <div class="d-flex align-items-center">
+                                                                <i class="bi bi-clock text-primary me-3 fs-5"></i>
+                                                                <span class="fw-medium">@slot.StartTime.ToString("h:mm tt") - @slot.EndTime.ToString("h:mm tt")</span>
+                                                            </div>
+                                                            <button class="btn btn-outline-danger btn-sm rounded-circle p-2" @onclick="() => RemoveSlotAsync(slot.AvailabilityId)" title="Remove Slot">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string? statusMessage;
+    private bool isError = false;
+    private List<DoctorAvailabilityResponse> availabilities = new();
+    private HashSet<string> expandedGroups = new();
+
+    private string slotType = "recurring";
+    private DayOfWeek newDayOfWeek = DayOfWeek.Monday;
+    private DateTime newSpecificDate = DateTime.Today;
+    private DateTime newStartTime = DateTime.Today.AddHours(9); // 09:00 AM
+    private DateTime newEndTime = DateTime.Today.AddHours(17);  // 05:00 PM
+
+    private void ToggleGroup(string groupId)
+    {
+        if (expandedGroups.Contains(groupId))
+            expandedGroups.Remove(groupId);
+        else
+            expandedGroups.Add(groupId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadAvailabilitiesAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAvailabilitiesAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await http.GetAsync("api/v1/doctors/availability");
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<List<DoctorAvailabilityResponse>>();
+                if (result != null)
+                {
+                    availabilities = result;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Failed to load schedule: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddSlotAsync()
+    {
+        if (newEndTime.TimeOfDay <= newStartTime.TimeOfDay)
+        {
+            ShowMessage("End time must be after start time.", true);
+            return;
+        }
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var request = new CreateDoctorAvailabilityRequest
+            {
+                IsRecurring = slotType == "recurring",
+                DayOfWeek = slotType == "recurring" ? (int)newDayOfWeek : null,
+                SpecificDate = slotType == "recurring" ? null : newSpecificDate.Date,
+                StartTime = TimeOnly.FromTimeSpan(newStartTime.TimeOfDay),
+                EndTime = TimeOnly.FromTimeSpan(newEndTime.TimeOfDay)
+            };
+
+            var response = await http.PostAsJsonAsync("api/v1/doctors/availability", request);
+            if (response.IsSuccessStatusCode)
+            {
+                ShowMessage("Slot added successfully.", false);
+                await LoadAvailabilitiesAsync();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                ShowMessage("Failed to add slot: Overlapping times or invalid request.", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"An error occurred: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveSlotAsync(Guid availabilityId)
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await http.DeleteAsync($"api/v1/doctors/availability/{availabilityId}");
+            if (response.IsSuccessStatusCode)
+            {
+                ShowMessage("Slot removed successfully.", false);
+                availabilities.RemoveAll(a => a.AvailabilityId == availabilityId);
+            }
+            else
+            {
+                ShowMessage("Failed to remove slot.", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"An error occurred: {ex.Message}", true);
+        }
+    }
+
+    private void ShowMessage(string message, bool error)
+    {
+        statusMessage = message;
+        isError = error;
+    }
+}

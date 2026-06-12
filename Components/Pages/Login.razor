@@ -1,0 +1,164 @@
+@page "/login"
+@rendermode InteractiveServer
+@using System.Net
+@using System.Security.Claims
+@using MediAlert.Constants
+@using MediAlert.DTOs.Auth
+@using MediAlert.Providers
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Login</PageTitle>
+
+<section class="login-shell">
+    <div class="login-panel">
+        <div class="login-header">
+            <p class="eyebrow">MediAlert</p>
+            <h1>Sign in</h1>
+        </div>
+
+        <EditForm Model="loginModel" OnValidSubmit="HandleLoginAsync" class="login-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="email">Email</label>
+                <InputText id="email" class="form-control" @bind-Value="loginModel.Email" autocomplete="username" />
+                <ValidationMessage For="() => loginModel.Email" />
+            </div>
+
+            <div class="field-group">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label for="password" class="mb-0">Password</label>
+                    <a href="/forgot-password" class="text-primary text-decoration-none small" style="font-weight: 500;">Forgot Password?</a>
+                </div>
+                <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" autocomplete="current-password" />
+                <ValidationMessage For="() => loginModel.Password" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="login-error" role="alert">@errorMessage</div>
+            }
+
+            <button type="submit" class="btn btn-primary login-button" disabled="@isSubmitting">
+                @(isSubmitting ? "Signing in..." : "Sign in")
+            </button>
+
+            <div class="signup-link-container">
+                <p>If you are a new user, <a href="/signup" class="signup-link">click to sign up</a>.</p>
+            </div>
+        </EditForm>
+    </div>
+</section>
+
+@code {
+    private readonly LoginRequest loginModel = new();
+
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task HandleLoginAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri(Navigation.BaseUri)
+            };
+
+            var response = await http.PostAsJsonAsync("api/auth/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+
+                if (auth is null || string.IsNullOrWhiteSpace(auth.Token))
+                {
+                    errorMessage = "Login succeeded, but no token was returned.";
+                    return;
+                }
+
+                await SaveAuthForTestingAsync(auth);
+                NotifyAuthState(auth);
+                NavigateAfterLogin(auth);
+                return;
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+            errorMessage = error?.Message ?? GetDefaultError(response.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Could not reach the login API.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private static string GetDefaultError(HttpStatusCode statusCode) =>
+        statusCode switch
+        {
+            HttpStatusCode.Unauthorized => "Invalid email or password.",
+            HttpStatusCode.Forbidden => "This account cannot sign in.",
+            _ => "Login failed."
+        };
+
+    private void NavigateAfterLogin(AuthResponse auth)
+    {
+        if (string.Equals(auth.Role, UserRoles.Patient, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/patient/dashboard");
+            return;
+        }
+        else if (string.Equals(auth.Role, UserRoles.Doctor, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/doctor/dashboard");
+            return;
+        }
+        else if (string.Equals(auth.Role, UserRoles.Caregiver, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/caregiver/dashboard");
+            return;
+        }
+        else if (string.Equals(auth.Role, UserRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/admin/dashboard");
+            return;
+        }
+
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task SaveAuthForTestingAsync(AuthResponse auth)
+    {
+        await JS.InvokeVoidAsync("localStorage.setItem", "medialert_token", auth.Token);
+        await JS.InvokeVoidAsync("localStorage.setItem", "medialert_user_id", auth.UserId);
+        await JS.InvokeVoidAsync("localStorage.setItem", "medialert_role", auth.Role);
+        await JS.InvokeVoidAsync("localStorage.setItem", "medialert_full_name", auth.FullName);
+    }
+
+    private void NotifyAuthState(AuthResponse auth)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Role, auth.Role),
+            new(ClaimTypes.NameIdentifier, auth.UserId),
+            new(ClaimTypes.Name, auth.FullName),
+            new(ClaimTypes.Email, auth.Email),
+        };
+
+        var identity = new ClaimsIdentity(claims, "jwt");
+        var principal = new ClaimsPrincipal(identity);
+
+        if (AuthStateProvider is JwtAuthenticationStateProvider jwtProvider)
+        {
+            jwtProvider.NotifyUserAuthentication(principal);
+        }
+    }
+}

@@ -1,0 +1,316 @@
+@page "/patient/interaction-checker"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.OpenFda
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold text-dark mb-2">Drug Interaction Checker</h2>
+            <p class="text-muted">Check your medications for potential interactions and safety warnings powered by OpenFDA.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4">
+                    <EditForm Model="searchForm" OnValidSubmit="SearchDrugAsync">
+                        <div class="input-group mb-4">
+                            <span class="input-group-text bg-white border-end-0 ps-3">
+                                <i class="bi bi-search text-muted"></i>
+                            </span>
+                            <InputText class="form-control border-start-0 ps-0" placeholder="Enter a medication name (e.g., Lisinopril)..." @bind-Value="searchForm.Query" style="box-shadow: none;" />
+                            <button class="btn btn-primary px-4 rounded-end-pill" type="submit" disabled="@isSearching">
+                                @if (isSearching)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                }
+                                Search
+                            </button>
+                        </div>
+                    </EditForm>
+                    
+                    @if (drugSearchResult is not null)
+                    {
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold mb-0">Results for "@drugSearchResult.Query"</h5>
+                                <button class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm" @onclick="SaveReport">
+                                    <i class="bi bi-bookmark-plus me-1"></i> Save Report
+                                </button>
+                            </div>
+                            
+                            @if (drugSearchResult.Results.Count == 0)
+                            {
+                                <div class="text-center py-4 bg-light rounded-4">
+                                    <i class="bi bi-check-circle text-success display-4 mb-2"></i>
+                                    <p class="text-muted mb-0">No interactions or safety notes found.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-flex flex-column gap-3">
+                                    @foreach (var drug in drugSearchResult.Results)
+                                    {
+                                        <div class="card bg-light border-0 rounded-4">
+                                            <div class="card-body">
+                                                <h6 class="fw-bold text-dark mb-1">@DisplayNames(drug)</h6>
+                                                <p class="small text-muted mb-3"><i class="bi bi-building me-1"></i> @DisplayList(drug.ManufacturerNames)</p>
+                                                
+                                                @if (drug.Warnings.Count > 0)
+                                                {
+                                                    <div class="alert alert-warning border-0 rounded-3 py-2 mb-2 small d-flex align-items-start">
+                                                        <i class="bi bi-exclamation-triangle-fill text-warning me-2 mt-1"></i>
+                                                        <div>
+                                                            <strong>Warning:</strong> @drug.Warnings[0]
+                                                        </div>
+                                                    </div>
+                                                }
+
+                                                @if (drug.DrugInteractions.Count > 0)
+                                                {
+                                                    <div class="alert alert-danger border-0 rounded-3 py-2 mb-0 small d-flex align-items-start">
+                                                        <i class="bi bi-exclamation-octagon-fill text-danger me-2 mt-1"></i>
+                                                        <div>
+                                                            <strong>Interaction Note:</strong> @drug.DrugInteractions[0]
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (!isSearching)
+                    {
+                        <div class="text-center py-5 text-muted opacity-75">
+                            <i class="bi bi-shield-check display-1 mb-3"></i>
+                            <h5 class="fw-bold">Search for a medication to view safety details</h5>
+                            <p class="small mb-0">Powered by OpenFDA Database</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-light">
+                <div class="card-body p-4">
+                    <h5 class="card-title fw-bold mb-4">Quick Check</h5>
+                    <p class="text-muted small mb-3">Click on any of your current medications to quickly check for interactions.</p>
+                    
+                    @if (isLoadingMedicines)
+                    {
+                        <div class="d-flex justify-content-center py-3">
+                            <div class="spinner-border text-primary spinner-border-sm" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (medicineList?.Medicines.Count > 0)
+                    {
+                        <div class="d-flex flex-column gap-2">
+                            @foreach (var med in medicineList.Medicines)
+                            {
+                                <div class="card border-0 shadow-sm rounded-3">
+                                    <div class="card-body p-3 d-flex justify-content-between align-items-center">
+                                        <div class="text-truncate fw-semibold me-2" title="@med.DrugName">
+                                            @med.DrugName
+                                        </div>
+                                        <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm" @onclick="() => SearchForMedication(med.DrugName)">
+                                            Check
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="bi bi-capsule text-muted display-4 opacity-25 mb-3"></i>
+                            <p class="text-muted small">No medications found.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    
+    private string? token;
+    private string? errorMessage;
+    private bool isSearching;
+    private bool isLoadingMedicines;
+    
+    private OpenFdaDrugSearchResponse? drugSearchResult;
+    private PatientMedicationListResponse? medicineList;
+    
+    private readonly SearchForm searchForm = new();
+    
+    private sealed class SearchForm
+    {
+        public string Query { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadMedicinesAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMedicinesAsync()
+    {
+        isLoadingMedicines = true;
+        errorMessage = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/patient/medicines");
+
+            if (response.IsSuccessStatusCode)
+            {
+                medicineList = await response.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load medications: " + ex.Message;
+        }
+        finally
+        {
+            isLoadingMedicines = false;
+        }
+    }
+
+    private async Task SearchForMedication(string name)
+    {
+        searchForm.Query = name;
+        await SearchDrugAsync();
+    }
+
+    private async Task SearchDrugAsync()
+    {
+        if (string.IsNullOrWhiteSpace(searchForm.Query)) return;
+        
+        isSearching = true;
+        errorMessage = null;
+        drugSearchResult = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync($"api/openfda/drugs/search?query={Uri.EscapeDataString(searchForm.Query)}&limit=3");
+
+            if (response.IsSuccessStatusCode)
+            {
+                drugSearchResult = await response.Content.ReadFromJsonAsync<OpenFdaDrugSearchResponse>(JsonOptions);
+            }
+            else
+            {
+                errorMessage = $"Error connecting to OpenFDA (Status: {response.StatusCode})";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to perform search: " + ex.Message;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task SaveReport()
+    {
+        if (drugSearchResult == null || string.IsNullOrWhiteSpace(token)) return;
+
+        var existingMeds = medicineList?.Medicines?.Select(m => m.DrugName).ToList() ?? new List<string>();
+        
+        var worstSeverity = "Minor";
+        if (drugSearchResult.Results.Any(r => r.Warnings.Any(w => w.Contains("Contraindicated", StringComparison.OrdinalIgnoreCase))))
+            worstSeverity = "Contraindicated";
+        else if (drugSearchResult.Results.Any(r => r.DrugInteractions.Any()))
+            worstSeverity = "Major";
+            
+        var explanations = drugSearchResult.Results.SelectMany(r => r.DrugInteractions.Concat(r.Warnings)).ToList();
+        var explanationText = explanations.Count > 0 ? string.Join("; ", explanations.Take(3)) : "No major warnings found.";
+
+        var request = new SaveInteractionReportRequest
+        {
+            QueryDrugName = drugSearchResult.Query,
+            ExistingDrugNames = string.Join(", ", existingMeds),
+            SeverityLevel = worstSeverity,
+            ExplanationText = explanationText
+        };
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/openfda/drugs/reports", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await JS.InvokeVoidAsync("alert", "Report saved successfully! You can view it in your Saved Reports.");
+            }
+            else
+            {
+                errorMessage = "Failed to save report.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to save report: " + ex.Message;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri(Navigation.BaseUri)
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return http;
+    }
+
+    private static string DisplayNames(OpenFdaDrugSearchItem drug)
+    {
+        if (drug.BrandNames.Count > 0) return DisplayList(drug.BrandNames);
+        if (drug.GenericNames.Count > 0) return DisplayList(drug.GenericNames);
+        return "Unnamed OpenFDA label";
+    }
+
+    private static string DisplayList(IEnumerable<string> values)
+    {
+        var list = values.Where(value => !string.IsNullOrWhiteSpace(value)).Take(3).ToList();
+        return list.Count == 0 ? "Not listed" : string.Join(", ", list);
+    }
+}

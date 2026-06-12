@@ -1,0 +1,230 @@
+@page "/reports/dashboard"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Compliance
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Reports Dashboard</PageTitle>
+
+<section class="reports-page">
+    <div class="reports-panel">
+        <div class="reports-header">
+            <p class="eyebrow">Module 8</p>
+            <h1>Reports Dashboard</h1>
+            <p class="subtitle">Generate and review your medication compliance reports.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="controls-section">
+            <h2>Generate Report</h2>
+            <div class="filter-row">
+                <div class="field-group">
+                    <label for="reportMonth">Month</label>
+                    <select id="reportMonth" class="form-control" @bind="selectedMonth">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            var label = new DateTime(2000, m, 1).ToString("MMMM");
+                            <option value="@m">@label</option>
+                        }
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="reportYear">Year</label>
+                    <select id="reportYear" class="form-control" @bind="selectedYear">
+                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="field-group field-actions">
+                    <button class="btn btn-primary" @onclick="LoadReportAsync" disabled="@isLoading">
+                        @(isLoading ? "Generating..." : "Generate Report")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        @if (report != null)
+        {
+            <div class="report-section">
+                <div class="report-title-bar">
+                    <h2>Compliance Report — @(new DateTime(selectedYear, selectedMonth, 1).ToString("MMMM yyyy"))</h2>
+                    <a href="/reports/pdf?month=@selectedMonth&year=@selectedYear" class="btn btn-outline-primary">
+                        Download PDF
+                    </a>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card primary">
+                        <p class="stat-label">Overall Compliance</p>
+                        <p class="stat-value">@report.OverallCompliancePercentage%</p>
+                    </div>
+                    <div class="stat-card success">
+                        <p class="stat-label">Doses Taken</p>
+                        <p class="stat-value">@report.TakenDoses</p>
+                    </div>
+                    <div class="stat-card warning">
+                        <p class="stat-label">Doses Missed</p>
+                        <p class="stat-value">@report.MissedDoses</p>
+                    </div>
+                    <div class="stat-card info">
+                        <p class="stat-label">Doses Skipped</p>
+                        <p class="stat-value">@report.SkippedDoses</p>
+                    </div>
+                    <div class="stat-card neutral">
+                        <p class="stat-label">Delayed Doses</p>
+                        <p class="stat-value">@report.DelayedDoses</p>
+                    </div>
+                    <div class="stat-card neutral">
+                        <p class="stat-label">Total Scheduled</p>
+                        <p class="stat-value">@report.TotalScheduledDoses</p>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(report.Recommendations))
+                {
+                    <div class="recommendations-box">
+                        <h3>Recommendations</h3>
+                        <p>@report.Recommendations</p>
+                    </div>
+                }
+
+                @if (report.MedicationSummaries?.Count > 0)
+                {
+                    <div class="med-table-section">
+                        <h3>Per-Medication Breakdown</h3>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Medication</th>
+                                    <th>Total Doses</th>
+                                    <th>Taken</th>
+                                    <th>Missed</th>
+                                    <th>Compliance %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var med in report.MedicationSummaries)
+                                {
+                                    <tr>
+                                        <td>@med.DrugName</td>
+                                        <td>@med.TotalScheduledDoses</td>
+                                        <td>@med.TakenDoses</td>
+                                        <td>@med.MissedDoses</td>
+                                        <td>
+                                            <div class="progress-bar-wrapper">
+                                                <div class="progress-bar-bg">
+                                                    <div class="progress-bar-fill @GetProgressClass(med.CompliancePercentage)"
+                                                         style="width:@med.CompliancePercentage%"></div>
+                                                </div>
+                                                <span>@med.CompliancePercentage%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (report.Trends?.Count > 0)
+                {
+                    <div class="trends-section">
+                        <h3>Daily Trend</h3>
+                        <div class="trend-bar-chart">
+                            @foreach (var trend in report.Trends.TakeLast(14))
+                            {
+                                <div class="trend-day">
+                                    <div class="trend-bar-bg">
+                                        <div class="trend-bar-fill @GetProgressClass((decimal)trend.CompliancePercentage)"
+                                             style="height:@trend.CompliancePercentage%;"></div>
+                                    </div>
+                                    <span class="trend-date">@trend.Date.ToString("dd")</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private ComplianceReportResponse? report;
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private int selectedMonth = DateTime.Now.Month;
+    private int selectedYear = DateTime.Now.Year;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadReportAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        hasError = false;
+        report = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token)) return;
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync($"api/v1/Reports/compliance?month={selectedMonth}&year={selectedYear}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadFromJsonAsync<ComplianceErrorResponse>(JsonOptions);
+                ShowError(error?.Message ?? $"Failed: {(int)response.StatusCode}");
+                return;
+            }
+
+            report = await response.Content.ReadFromJsonAsync<ComplianceReportResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return http;
+    }
+
+    private void ShowError(string message) { hasError = true; statusMessage = message; }
+
+    private string GetProgressClass(decimal pct) => pct switch
+    {
+        >= 80 => "fill-success",
+        >= 50 => "fill-warning",
+        _ => "fill-danger"
+    };
+}

@@ -1,0 +1,165 @@
+@page "/consultations/{ConsultationId:guid}/video"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.DependencyInjection
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject IServiceScopeFactory ScopeFactory
+
+<PageTitle>Video Consultation</PageTitle>
+
+<div class="video-call-container" style="display: flex; flex-wrap: wrap; gap: 2rem;">
+    <div class="video-main" style="flex: 1; min-width: 280px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem 1.5rem; background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        @if (isLoading)
+        {
+            <div class="spinner"></div>
+            <h2 class="mt-3">Loading Meeting Details...</h2>
+        }
+        else if (!string.IsNullOrEmpty(zoomUrl))
+        {
+            <div style="background: #eef2ff; padding: 2rem; border-radius: 50%; margin-bottom: 1.5rem;">
+                <i class="bi bi-camera-video-fill" style="font-size: 4rem; color: #4338ca;"></i>
+            </div>
+            <h2 style="color: #1e1b4b;">Your Consultation is Ready</h2>
+            <p style="color: #64748b; font-size: 1.1rem; max-width: 400px; margin: 1rem auto;">Please click the button below to open Zoom and join your secure video consultation.</p>
+            <a href="@zoomUrl" target="_blank" class="btn btn-primary btn-lg mt-3" style="font-size: 1.1rem; padding: 0.8rem 2.5rem; border-radius: 50px; background-color: #4338ca; border: none;">
+                Join Zoom Meeting
+            </a>
+            <button class="btn btn-outline-secondary mt-4" @onclick="EndCall">
+                Return to Dashboard
+            </button>
+        }
+        else
+        {
+            <div class="alert alert-warning">
+                <h4><i class="bi bi-exclamation-triangle-fill me-2"></i> Meeting Link Not Found</h4>
+                <p>The Zoom meeting link has not been generated for this consultation. Please contact support or reschedule.</p>
+            </div>
+        }
+    </div>
+    
+    <div class="sidebar" style="width: 350px; min-width: 280px; flex-grow: 1; background: #f8fafc; border-radius: 8px; padding: 1.5rem; display: flex; flex-direction: column;">
+        <div class="sidebar-header border-bottom pb-3 mb-3">
+            <h3 style="font-size: 1.25rem; margin: 0; color: #334155;"><i class="bi bi-journal-medical me-2"></i> Clinical Notes</h3>
+        </div>
+        <div class="notes-area" style="flex: 1; display: flex; flex-direction: column;">
+            <p class="small text-muted mb-2">Doctors: Use this area to record your consultation notes securely.</p>
+            <textarea class="form-control" style="flex: 1; resize: none; border-radius: 8px;" placeholder="Type your personal notes here..." @bind="clinicalNotes"></textarea>
+            <button class="btn btn-success mt-3 w-100" @onclick="SaveNotes" disabled="@isSaving">
+                @if (isSaving) {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Saving...</span>
+                } else {
+                    <span><i class="bi bi-save2-fill me-2"></i> Save Notes</span>
+                }
+            </button>
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert @(hasError ? "alert-danger" : "alert-success") small mt-3 mb-0" style="padding: 0.5rem 1rem;">@statusMessage</div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid ConsultationId { get; set; }
+
+    private string clinicalNotes = "";
+    private bool isSaving = false;
+    private string? statusMessage;
+    private bool hasError = false;
+    private string? token;
+    
+    private string? zoomUrl;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<MediAlert.Data.ApplicationDbContext>();
+            
+            var consultation = await db.Consultations
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ConsultationId == ConsultationId);
+                
+            if (consultation != null)
+            {
+                zoomUrl = consultation.ZoomMeetingUrl;
+            }
+        }
+        catch (Exception)
+        {
+            zoomUrl = null;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        }
+    }
+
+    private async Task SaveNotes()
+    {
+        if (string.IsNullOrWhiteSpace(clinicalNotes))
+        {
+            statusMessage = "Please enter some notes before saving.";
+            hasError = true;
+            return;
+        }
+
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var content = new StringContent(JsonSerializer.Serialize(clinicalNotes), System.Text.Encoding.UTF8, "application/json");
+            var response = await http.PostAsync($"api/v1/Appointments/{ConsultationId}/notes", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "Notes saved successfully.";
+            }
+            else
+            {
+                statusMessage = "Failed to save notes.";
+                hasError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = "Error: " + ex.Message;
+            hasError = true;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EndCall()
+    {
+        if (!string.IsNullOrWhiteSpace(clinicalNotes) && !isSaving)
+        {
+            await SaveNotes();
+        }
+        Navigation.NavigateTo("/consultations");
+    }
+}

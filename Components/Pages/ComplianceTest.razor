@@ -1,0 +1,458 @@
+@page "/patient/compliance-test"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Compliance
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Intake Logs</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2 class="fw-bold text-dark mb-2">Intake Logs</h2>
+            <p class="text-muted mb-0">Record your medication doses and track your compliance history.</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <button class="btn btn-outline-primary rounded-pill px-4 shadow-sm" @onclick="GoToComplianceReport">
+                <i class="bi bi-file-earmark-bar-graph me-1"></i> Full Report
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(pageMessage))
+    {
+        <div class="alert @(hasError ? "alert-danger" : "alert-success") border-0 shadow-sm mb-4">
+            @pageMessage
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- Log Dose Column -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                    <h5 class="fw-bold mb-0">Log Today's Dose</h5>
+                </div>
+                <div class="card-body">
+                    @if (isLoadingMedicines)
+                    {
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (DoseOptions.Count == 0)
+                    {
+                        <div class="text-center py-4">
+                            <i class="bi bi-capsule text-muted display-4 opacity-25 mb-3"></i>
+                            <p class="text-muted">No medications scheduled.</p>
+                            <button class="btn btn-sm btn-outline-primary mt-2 rounded-pill" @onclick="GoToMedicines">Add Medicine</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <EditForm Model="intakeForm" OnValidSubmit="RecordIntakeAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="mb-3">
+                                <label for="doseSelect" class="form-label fw-semibold">Dose</label>
+                                <InputSelect id="doseSelect" class="form-select" @bind-Value="intakeForm.DoseScheduleId">
+                                    @foreach (var option in DoseOptions)
+                                    {
+                                        <option value="@option.DoseScheduleId">@option.Label</option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="status" class="form-label fw-semibold">Status</label>
+                                <InputSelect id="status" class="form-select" @bind-Value="intakeForm.Status">
+                                    <option value="Taken">Taken</option>
+                                    <option value="Delayed">Delayed</option>
+                                    <option value="Skipped">Skipped</option>
+                                    <option value="Missed">Missed</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="notes" class="form-label fw-semibold">Notes (Optional)</label>
+                                <InputTextArea id="notes" class="form-control" @bind-Value="intakeForm.Notes" rows="2" placeholder="Any side effects or notes..." />
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill py-2" disabled="@isRecordingIntake">
+                                @if (isRecordingIntake)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                }
+                                Record Dose
+                            </button>
+                        </EditForm>
+                    }
+
+                    @if (lastIntake is not null)
+                    {
+                        <div class="alert alert-success mt-4 mb-0 border-0 rounded-4">
+                            <strong><i class="bi bi-check-circle me-1"></i> Recorded:</strong><br/>
+                            @lastIntake.MedicationName - @lastIntake.Status<br/>
+                            <small>@lastIntake.ScheduledTime.ToString("HH:mm") on @lastIntake.ScheduledDate.ToShortDateString()</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- History Column -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">Compliance History</h5>
+                        <span class="badge bg-light text-dark border">@(history?.TotalLogs ?? 0) logs found</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="historyForm" OnValidSubmit="LoadHistoryAsync" class="mb-4 bg-light p-3 rounded-4">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label for="fromDate" class="form-label small fw-semibold text-muted mb-1">From</label>
+                                <InputDate id="fromDate" class="form-control form-control-sm" @bind-Value="historyForm.FromDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <label for="toDate" class="form-label small fw-semibold text-muted mb-1">To</label>
+                                <InputDate id="toDate" class="form-control form-control-sm" @bind-Value="historyForm.ToDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary btn-sm w-100 rounded-pill" disabled="@isLoadingHistory">
+                                    @if (isLoadingHistory)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    }
+                                    <i class="bi bi-search"></i> View History
+                                </button>
+                            </div>
+                        </div>
+                    </EditForm>
+
+                    @if (isLoadingHistory)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (history is not null)
+                    {
+                        @if (history.Logs.Count == 0)
+                        {
+                            <div class="text-center py-5">
+                                <i class="bi bi-clock-history text-muted display-4 opacity-25 mb-3"></i>
+                                <p class="text-muted">No intake logs in this date range.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="border-0 rounded-start">Date</th>
+                                            <th class="border-0">Time</th>
+                                            <th class="border-0">Medicine</th>
+                                            <th class="border-0 rounded-end">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var log in history.Logs)
+                                        {
+                                            <tr>
+                                                <td>@log.ScheduledDate.ToShortDateString()</td>
+                                                <td><span class="badge bg-light text-dark border">@log.ScheduledTime.ToString("HH:mm")</span></td>
+                                                <td class="fw-semibold">@log.MedicationName</td>
+                                                <td>
+                                                    @if (log.Status == "Taken")
+                                                    {
+                                                        <span class="badge bg-success bg-opacity-10 text-success border border-success-subtle px-2 py-1 rounded-pill"><i class="bi bi-check-circle me-1"></i>Taken</span>
+                                                    }
+                                                    else if (log.Status == "Delayed")
+                                                    {
+                                                        <span class="badge bg-info bg-opacity-10 text-info border border-info-subtle px-2 py-1 rounded-pill"><i class="bi bi-clock me-1"></i>Delayed</span>
+                                                    }
+                                                    else if (log.Status == "Skipped")
+                                                    {
+                                                        <span class="badge bg-warning bg-opacity-10 text-warning border border-warning-subtle px-2 py-1 rounded-pill"><i class="bi bi-skip-forward me-1"></i>Skipped</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle px-2 py-1 rounded-pill"><i class="bi bi-x-circle me-1"></i>Missed</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private string? token;
+    private string? pageMessage;
+
+    private bool hasError;
+    private bool isLoadingMedicines;
+    private bool isRecordingIntake;
+    private bool isLoadingHistory;
+
+    private PatientMedicationListResponse? medicineList;
+    private IntakeLogResponse? lastIntake;
+    private ComplianceHistoryResponse? history;
+
+    private readonly IntakeForm intakeForm = new();
+    private readonly HistoryForm historyForm = new();
+
+    private List<DoseOption> DoseOptions =>
+        medicineList?.Medicines
+            .SelectMany(medicine => medicine.DoseSchedules.Select(schedule =>
+                new DoseOption(
+                    schedule.DoseScheduleId,
+                    $"{medicine.DrugName} at {schedule.ScheduledTime:HH:mm}")))
+            .ToList()
+        ?? [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadMedicinesAsync();
+        
+        // Auto-load 7-day history on start if we have a patientId
+        if (medicineList != null && medicineList.PatientId != Guid.Empty)
+        {
+            await LoadHistoryAsync();
+        }
+        
+        StateHasChanged();
+    }
+
+    private async Task LoadMedicinesAsync()
+    {
+        isLoadingMedicines = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/patient/medicines");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            medicineList = await response.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+
+            var firstDose = DoseOptions.FirstOrDefault();
+            if (firstDose is not null && string.IsNullOrWhiteSpace(intakeForm.DoseScheduleId))
+            {
+                intakeForm.DoseScheduleId = firstDose.DoseScheduleId.ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoadingMedicines = false;
+        }
+    }
+
+    private async Task RecordIntakeAsync()
+    {
+        if (medicineList is null || medicineList.PatientId == Guid.Empty)
+        {
+            ShowError("No patient profile is loaded.");
+            return;
+        }
+
+        if (!Guid.TryParse(intakeForm.DoseScheduleId, out var doseScheduleId))
+        {
+            ShowError("Choose a valid dose schedule.");
+            return;
+        }
+
+        isRecordingIntake = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/compliance/intake-logs", new RecordIntakeRequest
+            {
+                PatientId = medicineList.PatientId,
+                DoseScheduleId = doseScheduleId,
+                ScheduledDate = DateOnly.FromDateTime(DateTime.Today),
+                Status = intakeForm.Status,
+                ActualTakenAt = intakeForm.Status is "Taken" or "Delayed" ? DateTime.UtcNow : null,
+                Notes = intakeForm.Notes,
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            lastIntake = await response.Content.ReadFromJsonAsync<IntakeLogResponse>(JsonOptions);
+            ShowSuccess("Dose recorded successfully.");
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isRecordingIntake = false;
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        if (medicineList is null || medicineList.PatientId == Guid.Empty)
+        {
+            ShowError("No patient profile is loaded.");
+            return;
+        }
+
+        isLoadingHistory = true;
+        ClearMessage();
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var url = $"api/compliance/history?patientId={medicineList.PatientId}" +
+                      $"&fromDate={historyForm.FromDate:yyyy-MM-dd}" +
+                      $"&toDate={historyForm.ToDate:yyyy-MM-dd}";
+
+            var response = await http.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            history = await response.Content.ReadFromJsonAsync<ComplianceHistoryResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoadingHistory = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri(Navigation.BaseUri)
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError(await ReadErrorMessageAsync(response));
+    }
+
+    private static async Task<string> ReadErrorMessageAsync(HttpResponseMessage response)
+    {
+        var text = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return $"Request failed with status {(int)response.StatusCode}.";
+        }
+
+        try
+        {
+            var error = JsonSerializer.Deserialize<ApiErrorEnvelope>(text, JsonOptions);
+            return error?.Message
+                ?? error?.ErrorMessage
+                ?? $"Request failed with status {(int)response.StatusCode}.";
+        }
+        catch (JsonException)
+        {
+            return text;
+        }
+    }
+
+    private void ShowSuccess(string message)
+    {
+        hasError = false;
+        pageMessage = message;
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        pageMessage = message;
+    }
+
+    private void ClearMessage()
+    {
+        hasError = false;
+        pageMessage = null;
+    }
+
+    private void GoToMedicines() => Navigation.NavigateTo("/patient/medicines");
+    private void GoToComplianceReport() => Navigation.NavigateTo("/patient/compliance-report");
+
+    private sealed class IntakeForm
+    {
+        public string DoseScheduleId { get; set; } = string.Empty;
+        public string Status { get; set; } = "Taken";
+        public string? Notes { get; set; }
+    }
+
+    private sealed class HistoryForm
+    {
+        public DateTime FromDate { get; set; } = DateTime.Today.AddDays(-7);
+        public DateTime ToDate { get; set; } = DateTime.Today;
+    }
+
+    private sealed record DoseOption(Guid DoseScheduleId, string Label);
+
+    private sealed class ApiErrorEnvelope
+    {
+        public string? Message { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? ErrorCode { get; set; }
+    }
+}

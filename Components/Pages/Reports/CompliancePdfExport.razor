@@ -1,0 +1,145 @@
+@page "/reports/pdf"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Compliance
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Export Compliance Report PDF</PageTitle>
+
+<section class="pdf-page">
+    <div class="pdf-panel">
+        <div class="pdf-header">
+            <p class="eyebrow">Module 8</p>
+            <h1>PDF Export</h1>
+            <p class="subtitle">Download your monthly compliance report as a PDF.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="export-form-section">
+            <div class="filter-row">
+                <div class="field-group">
+                    <label for="pdfMonth">Month</label>
+                    <select id="pdfMonth" class="form-control" @bind="selectedMonth">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            var label = new DateTime(2000, m, 1).ToString("MMMM");
+                            <option value="@m">@label</option>
+                        }
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="pdfYear">Year</label>
+                    <select id="pdfYear" class="form-control" @bind="selectedYear">
+                        @for (int y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="field-group field-actions">
+                    <button class="btn btn-primary" @onclick="DownloadPdfAsync" disabled="@isDownloading">
+                        @(isDownloading ? "Preparing PDF..." : "⬇ Download PDF")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-cards">
+            <div class="info-card">
+                <div class="info-icon">📊</div>
+                <div>
+                    <h3>What's included</h3>
+                    <ul>
+                        <li>Overall compliance percentage</li>
+                        <li>Dose-by-dose breakdown</li>
+                        <li>Per-medication analysis</li>
+                        <li>Daily trend chart data</li>
+                        <li>Doctor recommendations</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">🔒</div>
+                <div>
+                    <h3>Privacy</h3>
+                    <p>PDF reports are generated server-side and streamed directly to your browser. No third-party services are involved.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery] public int month { get; set; }
+    [SupplyParameterFromQuery] public int year { get; set; }
+
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isDownloading;
+    private int selectedMonth;
+    private int selectedYear;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            selectedMonth = month > 0 ? month : DateTime.Now.Month;
+            selectedYear  = year  > 0 ? year  : DateTime.Now.Year;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DownloadPdfAsync()
+    {
+        isDownloading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync(
+                $"api/v1/Reports/monthly/pdf?month={selectedMonth}&year={selectedYear}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                ShowError($"Could not generate PDF: {(int)response.StatusCode}. {body}");
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var base64 = Convert.ToBase64String(bytes);
+            var filename = $"ComplianceReport_{selectedYear}_{selectedMonth:D2}.pdf";
+
+            await JS.InvokeVoidAsync("downloadFileFromBase64", base64, filename, "application/pdf");
+            statusMessage = $"{filename} downloaded successfully.";
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isDownloading = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return http;
+    }
+
+    private void ShowError(string msg) { hasError = true; statusMessage = msg; }
+}

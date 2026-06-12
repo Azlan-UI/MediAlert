@@ -1,0 +1,113 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<AuthorizeView>
+    <Authorized>
+        <div class="page">
+            <div class="sidebar @(isSidebarOpen ? "sidebar-open" : "")">
+                <NavMenu />
+            </div>
+
+            @if (isSidebarOpen)
+            {
+                <div class="sidebar-backdrop d-md-none" @onclick="ToggleSidebar"></div>
+            }
+
+            <main>
+                <div class="top-header">
+                    <!-- Mobile Hamburger Menu Button -->
+                    <button class="btn btn-link d-md-none text-dark me-auto p-0" style="font-size: 1.5rem; border: none; background: transparent; display: flex; align-items: center;" @onclick="ToggleSidebar">
+                        <i class="bi bi-list"></i>
+                    </button>
+
+                    <div class="user-profile-header">
+                        <NotificationDropdown />
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge bg-primary rounded-pill px-3 py-2 text-uppercase fw-bold" style="letter-spacing: 1px;">
+                                @context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value
+                            </span>
+                            <div class="avatar" title="@context.User.Identity?.Name">
+                                @context.User.Identity?.Name?.FirstOrDefault().ToString().ToUpper()
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <article class="content">
+                    @Body
+                </article>
+            </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @Body
+    </NotAuthorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool isSidebarOpen = false;
+
+    private void ToggleSidebar()
+    {
+        isSidebarOpen = !isSidebarOpen;
+    }
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (isSidebarOpen)
+        {
+            isSidebarOpen = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Restore authentication state from localStorage after external redirect (e.g., Stripe)
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                var role = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_role");
+                var userId = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_user_id");
+                var fullName = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_full_name");
+
+                var claims = new List<System.Security.Claims.Claim>
+                {
+                    new(System.Security.Claims.ClaimTypes.Role, role ?? ""),
+                    new(System.Security.Claims.ClaimTypes.NameIdentifier, userId ?? ""),
+                    new(System.Security.Claims.ClaimTypes.Name, fullName ?? ""),
+                };
+
+                var identity = new System.Security.Claims.ClaimsIdentity(claims, "jwt");
+                var principal = new System.Security.Claims.ClaimsPrincipal(identity);
+
+                if (AuthStateProvider is MediAlert.Providers.JwtAuthenticationStateProvider jwtProvider)
+                {
+                    jwtProvider.NotifyUserAuthentication(principal);
+                }
+            }
+        }
+    }
+}

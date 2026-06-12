@@ -1,0 +1,134 @@
+@page "/signup"
+@rendermode InteractiveServer
+@using System.Net
+@using MediAlert.Constants
+@using MediAlert.DTOs.Auth
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Sign Up</PageTitle>
+
+<section class="signup-shell">
+    <div class="signup-panel">
+        <div class="signup-header">
+            <p class="eyebrow">MediAlert</p>
+            <h1>Create Account</h1>
+        </div>
+
+        <EditForm Model="registerModel" OnValidSubmit="HandleRegisterAsync" class="signup-form">
+            <DataAnnotationsValidator />
+
+            <div class="field-group">
+                <label for="fullname">Full Name</label>
+                <InputText id="fullname" class="form-control" @bind-Value="registerModel.FullName" autocomplete="name" />
+                <ValidationMessage For="() => registerModel.FullName" />
+            </div>
+
+            <div class="field-group">
+                <label for="email">Email</label>
+                <InputText id="email" type="email" class="form-control" @bind-Value="registerModel.Email" autocomplete="email" />
+                <ValidationMessage For="() => registerModel.Email" />
+            </div>
+
+            <div class="field-group">
+                <label for="role">Account Type</label>
+                <InputSelect id="role" class="form-select form-control" @bind-Value="registerModel.Role">
+                    <option value="">-- Select Role --</option>
+                    <option value="@UserRoles.Patient">Patient</option>
+                    <option value="@UserRoles.Caregiver">Caregiver</option>
+                    <option value="@UserRoles.Doctor">Doctor</option>
+                </InputSelect>
+                <ValidationMessage For="() => registerModel.Role" />
+            </div>
+
+            @if (registerModel.Role == UserRoles.Doctor)
+            {
+                <div class="field-group">
+                    <label for="license">License Number</label>
+                    <InputText id="license" class="form-control" @bind-Value="registerModel.LicenseNumber" />
+                    <ValidationMessage For="() => registerModel.LicenseNumber" />
+                </div>
+                <div class="field-group">
+                    <label for="spec">Specialization</label>
+                    <InputText id="spec" class="form-control" @bind-Value="registerModel.Specialization" />
+                    <ValidationMessage For="() => registerModel.Specialization" />
+                </div>
+                <div class="field-group">
+                    <label for="qualifications">Qualifications</label>
+                    <InputText id="qualifications" class="form-control" @bind-Value="registerModel.Qualifications" />
+                    <ValidationMessage For="() => registerModel.Qualifications" />
+                </div>
+                <div class="field-group">
+                    <label for="yoe">Years of Experience</label>
+                    <InputNumber id="yoe" class="form-control" @bind-Value="registerModel.YearsOfExperience" />
+                    <ValidationMessage For="() => registerModel.YearsOfExperience" />
+                </div>
+            }
+
+            <div class="field-group">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" class="form-control" @bind-Value="registerModel.Password" autocomplete="new-password" />
+                <ValidationMessage For="() => registerModel.Password" />
+            </div>
+
+            <div class="field-group">
+                <label for="confirm-password">Confirm Password</label>
+                <InputText id="confirm-password" type="password" class="form-control" @bind-Value="registerModel.ConfirmPassword" autocomplete="new-password" />
+                <ValidationMessage For="() => registerModel.ConfirmPassword" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div class="signup-error" role="alert">@errorMessage</div>
+            }
+
+            <button type="submit" class="btn btn-primary signup-button" disabled="@isSubmitting">
+                @(isSubmitting ? "Creating Account..." : "Sign Up")
+            </button>
+
+            <div class="signup-footer">
+                <p>Already have an account? <a href="/login">Sign in</a></p>
+            </div>
+        </EditForm>
+    </div>
+</section>
+
+@code {
+    private readonly RegisterRequest registerModel = new();
+
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task HandleRegisterAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            using var http = new HttpClient
+            {
+                BaseAddress = new Uri(Navigation.BaseUri)
+            };
+
+            var response = await http.PostAsJsonAsync("api/auth/register", registerModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            var error = await response.Content.ReadFromJsonAsync<AuthErrorResponse>();
+            errorMessage = error?.Message ?? "Registration failed. Please check your inputs.";
+        }
+        catch (HttpRequestException)
+        {
+            errorMessage = "Could not reach the registration API.";
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

@@ -1,0 +1,267 @@
+@page "/profile"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Profile
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>My Profile</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-8">
+            <h2 class="fw-bold text-dark mb-2">My Profile</h2>
+            <p class="text-muted">Manage your personal information and account settings.</p>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            @if (!string.IsNullOrWhiteSpace(statusMessage))
+            {
+                <div class="alert @(hasError ? "alert-danger" : "alert-success") border-0 shadow-sm rounded-4 mb-4">
+                    @statusMessage
+                </div>
+            }
+
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4 p-md-5">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <EditForm Model="profileForm" OnValidSubmit="UpdateProfileAsync">
+                            <DataAnnotationsValidator />
+
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label for="role" class="form-label fw-semibold text-muted">Account Role</label>
+                                    <input id="role" type="text" class="form-control bg-light" value="@profileForm.Role" disabled />
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="email" class="form-label fw-semibold text-muted">Email Address</label>
+                                    <InputText id="email" type="email" class="form-control" @bind-Value="profileForm.Email" />
+                                </div>
+
+                                <div class="col-12">
+                                    <hr class="text-muted opacity-25 my-2" />
+                                    <h6 class="fw-bold mb-3 mt-2">Personal Details</h6>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="fullName" class="form-label fw-semibold">Full Name</label>
+                                    <InputText id="fullName" class="form-control" @bind-Value="profileForm.FullName" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label for="phoneNumber" class="form-label fw-semibold">Phone Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light"><i class="bi bi-telephone"></i></span>
+                                        <InputText id="phoneNumber" type="tel" class="form-control" @bind-Value="profileForm.PhoneNumber" placeholder="+1234567890" />
+                                    </div>
+                                    <ValidationMessage For="@(() => profileForm.PhoneNumber)" class="text-danger small mt-1" />
+                                    <small class="text-muted">Format: +1234567890</small>
+                                </div>
+
+                                @if (profileForm.Role == "Doctor")
+                                {
+                                    <div class="col-12">
+                                        <hr class="text-muted opacity-25 my-2" />
+                                        <h6 class="fw-bold mb-3 mt-2">Professional Details</h6>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="licenseNumber" class="form-label fw-semibold">License Number</label>
+                                        <InputText id="licenseNumber" class="form-control" @bind-Value="profileForm.LicenseNumber" />
+                                        <ValidationMessage For="@(() => profileForm.LicenseNumber)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="specialization" class="form-label fw-semibold">Specialization</label>
+                                        <InputText id="specialization" class="form-control" @bind-Value="profileForm.Specialization" />
+                                        <ValidationMessage For="@(() => profileForm.Specialization)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="qualifications" class="form-label fw-semibold">Qualifications</label>
+                                        <InputText id="qualifications" class="form-control" @bind-Value="profileForm.Qualifications" />
+                                        <ValidationMessage For="@(() => profileForm.Qualifications)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label for="yearsOfExperience" class="form-label fw-semibold">Years of Experience</label>
+                                        <InputNumber id="yearsOfExperience" class="form-control" @bind-Value="profileForm.YearsOfExperience" />
+                                        <ValidationMessage For="@(() => profileForm.YearsOfExperience)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="clinicName" class="form-label fw-semibold">Clinic/Hospital Name</label>
+                                        <InputText id="clinicName" class="form-control" @bind-Value="profileForm.ClinicName" />
+                                        <ValidationMessage For="@(() => profileForm.ClinicName)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="contactInfo" class="form-label fw-semibold">Professional Contact Info</label>
+                                        <InputText id="contactInfo" class="form-control" @bind-Value="profileForm.ContactInfo" placeholder="e.g. clinic phone or email" />
+                                        <ValidationMessage For="@(() => profileForm.ContactInfo)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="profilePhotoUrl" class="form-label fw-semibold">Profile Photo URL</label>
+                                        <InputText id="profilePhotoUrl" class="form-control" @bind-Value="profileForm.ProfilePhotoUrl" />
+                                        <ValidationMessage For="@(() => profileForm.ProfilePhotoUrl)" class="text-danger small mt-1" />
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label for="biography" class="form-label fw-semibold">Biography / About</label>
+                                        <InputTextArea id="biography" class="form-control" rows="4" @bind-Value="profileForm.Biography" />
+                                        <ValidationMessage For="@(() => profileForm.Biography)" class="text-danger small mt-1" />
+                                    </div>
+                                }
+
+                                <div class="col-12 mt-4 text-end">
+                                    <button type="submit" class="btn btn-primary rounded-pill px-5 py-2 shadow-sm" disabled="@isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        }
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private UpdateProfileRequest profileForm = new();
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isSaving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadProfileAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Profile");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            var profile = await response.Content.ReadFromJsonAsync<UserProfileDto>(JsonOptions);
+            if (profile != null)
+            {
+                profileForm = new UpdateProfileRequest
+                {
+                    FullName = profile.FullName,
+                    Email = profile.Email,
+                    PhoneNumber = profile.PhoneNumber,
+                    Role = profile.Role,
+                    LicenseNumber = profile.LicenseNumber,
+                    Specialization = profile.Specialization,
+                    Qualifications = profile.Qualifications,
+                    YearsOfExperience = profile.YearsOfExperience,
+                    ClinicName = profile.ClinicName,
+                    ContactInfo = profile.ContactInfo,
+                    Biography = profile.Biography,
+                    ProfilePhotoUrl = profile.ProfilePhotoUrl
+                };
+            }
+
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task UpdateProfileAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PutAsJsonAsync("api/v1/Profile", profileForm);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Profile updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError($"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    public class UpdateProfileRequest : MediAlert.DTOs.Profile.UpdateProfileRequest
+    {
+        public string Role { get; set; } = string.Empty;
+    }
+}

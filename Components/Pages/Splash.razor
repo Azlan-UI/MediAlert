@@ -1,0 +1,46 @@
+@page "/"
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>MediAlert</PageTitle>
+
+<div class="splash-container">
+    <div class="splash-content">
+        <div class="logo-wrapper">
+            <span class="bi bi-heart-pulse-fill splash-icon"></span>
+        </div>
+        <h1 class="splash-title">MediAlert</h1>
+        <p class="splash-tagline">Your Health, Our Priority</p>
+        
+        <div class="loading-dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
+    </div>
+</div>
+
+@code {
+    @inject IJSRuntime JS
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            if (!string.IsNullOrEmpty(token))
+            {
+                var role = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_role");
+                if (string.Equals(role, "Patient", StringComparison.OrdinalIgnoreCase)) Navigation.NavigateTo("/patient/dashboard");
+                else if (string.Equals(role, "Doctor", StringComparison.OrdinalIgnoreCase)) Navigation.NavigateTo("/doctor/dashboard");
+                else if (string.Equals(role, "Caregiver", StringComparison.OrdinalIgnoreCase)) Navigation.NavigateTo("/caregiver/dashboard");
+                else if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)) Navigation.NavigateTo("/admin/dashboard");
+                else Navigation.NavigateTo("/login");
+                return;
+            }
+
+            // Wait for 4.5 seconds to show the splash screen
+            await Task.Delay(4500);
+            Navigation.NavigateTo("/login");
+        }
+    }
+}

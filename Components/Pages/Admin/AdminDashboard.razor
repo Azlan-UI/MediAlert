@@ -1,0 +1,47 @@
+@page "/admin/dashboard"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+<section class="admin-page">
+    <div class="admin-panel">
+        <div class="admin-header">
+            <p class="eyebrow">Admin Panel</p>
+            <h1>System Overview</h1>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card" @onclick='() => NavigateTo("users")'>
+                <h3>User Management</h3>
+                <p>View registered users, patients, caregivers, and suspend accounts.</p>
+                <button class="btn btn-primary">Manage Users</button>
+            </div>
+
+            <div class="dashboard-card" @onclick='() => NavigateTo("doctors")'>
+                <h3>Doctor Verifications</h3>
+                <p>Review and approve pending doctor license applications.</p>
+                <button class="btn btn-primary">Manage Doctors</button>
+            </div>
+
+            <div class="dashboard-card" @onclick='() => NavigateTo("consultations")'>
+                <h3>Consultations</h3>
+                <p>Oversight of all scheduled and past consultations.</p>
+                <button class="btn btn-primary">View Consultations</button>
+            </div>
+
+            <div class="dashboard-card" @onclick='() => NavigateTo("subscriptions")'>
+                <h3>Subscriptions</h3>
+                <p>View active Premium patient subscriptions.</p>
+                <button class="btn btn-primary">View Subscriptions</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private void NavigateTo(string page)
+    {
+        Navigation.NavigateTo($"/admin/{page}");
+    }
+}

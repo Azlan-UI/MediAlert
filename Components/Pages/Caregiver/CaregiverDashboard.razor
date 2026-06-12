@@ -1,0 +1,497 @@
+@page "/caregiver/dashboard"
+@page "/caregiver/patient/{SelectedPatientIdParam:guid}"
+@using Microsoft.AspNetCore.Authorization
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Caregiver
+@using MediAlert.Constants
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Caregiver Dashboard</PageTitle>
+
+<section class="caregiver-page">
+    <div class="caregiver-panel">
+        @if (!isAuthorized)
+        {
+            <div class="d-flex flex-column align-items-center justify-content-center py-5" style="min-height: 300px;">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="text-muted">Verifying authorization...</p>
+            </div>
+        }
+        else
+        {
+            <div class="caregiver-header">
+            @if (SelectedPatientIdParam.HasValue)
+            {
+                <h1>Patient Dashboard</h1>
+            }
+            else
+            {
+                <h1>Caregiver Dashboard</h1>
+                <p>Manage your patients and monitor their compliance and alerts.</p>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        @if (!SelectedPatientIdParam.HasValue)
+        {
+            <div class="links-section">
+                <h2>My Patients</h2>
+                @if (isLoading)
+                {
+                    <p>Loading your patients...</p>
+                }
+                else if (links.Any())
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Patient Name</th>
+                                <th>Status</th>
+                                <th>Requested At</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var link in links)
+                            {
+                                <tr>
+                                    <td>@link.PatientFullName</td>
+                                    <td>
+                                        <span class="badge @(link.Status == LinkStatuses.Approved ? "bg-success" : link.Status == LinkStatuses.Pending ? "bg-warning text-dark" : "bg-danger")">
+                                            @link.Status
+                                        </span>
+                                    </td>
+                                    <td>@link.RequestedAt.ToString("g")</td>
+                                    <td>
+                                        <div class="d-flex flex-column gap-2">
+                                        @if (link.Status == LinkStatuses.Pending)
+                                        {
+                                            <button class="btn btn-sm btn-primary" style="width: 120px;" @onclick="() => ApproveLinkAsync(link.LinkId)">Approve</button>
+                                            <button class="btn btn-sm btn-danger" style="width: 120px;" @onclick="() => RejectLinkAsync(link.LinkId)">Reject</button>
+                                        }
+                                        else if (link.Status == LinkStatuses.Approved)
+                                        {
+                                            <a class="btn btn-sm btn-secondary" style="width: 120px;" href="/caregiver/patient/@link.PatientId" target="_blank">View Dashboard</a>
+                                            <button class="btn btn-sm btn-danger" style="width: 120px;" @onclick="() => RevokeLinkAsync(link.LinkId)">Revoke</button>
+                                        }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p>You have no patient link requests or active patients.</p>
+                }
+            </div>
+        }
+
+        @if ((SelectedPatientIdParam.HasValue || selectedPatientId.HasValue) && dashboardData != null)
+        {
+            <div class="patient-dashboard">
+                <h2>Dashboard for @dashboardData.PatientFullName</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h3 class="mb-0">Compliance Overview</h3>
+                            <select class="form-select form-select-sm w-auto" @bind="SelectedWindowDays">
+                                <option value="7">7 Days</option>
+                                <option value="14">14 Days</option>
+                                <option value="30">30 Days</option>
+                            </select>
+                        </div>
+                        <p class="big-number">@dashboardData.ComplianceOverview.OverallCompliancePercentage%</p>
+                        <p>Overall Compliance (@selectedWindowDays Days)</p>
+                    </div>
+
+                    <div class="dashboard-card alerts-card">
+                        <h3>Missed Dose Alerts (@dashboardData.MissedDoseAlerts.Count)</h3>
+                        @if (dashboardData.MissedDoseAlerts.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var alert in dashboardData.MissedDoseAlerts)
+                                {
+                                    <li>@alert.MedicationName at @alert.ScheduledTime.ToString("t")</li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p>No missed doses recently.</p>
+                        }
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>Upcoming Doses</h3>
+                        @if (dashboardData.UpcomingDoses.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var dose in dashboardData.UpcomingDoses)
+                                {
+                                    <li>@dose.MedicationName at @dose.ScheduledTime.ToString("t")</li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p>No upcoming doses today.</p>
+                        }
+                    </div>
+
+                    <div class="dashboard-card">
+                        <h3>Upcoming Consultations</h3>
+                        @if (dashboardData.UpcomingAppointments.Count > 0)
+                        {
+                            <ul>
+                                @foreach (var appt in dashboardData.UpcomingAppointments)
+                                {
+                                    <li class="mb-3 list-unstyled">
+                                        <div class="border rounded p-3 bg-white shadow-sm">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold text-primary">Dr. @appt.DoctorFullName</h6>
+                                                    <small class="text-muted">@appt.AppointmentType</small>
+                                                </div>
+                                                <span class="badge @(appt.Status == "Scheduled" ? "bg-success" : "bg-secondary")">@appt.Status</span>
+                                            </div>
+                                            <div class="d-flex align-items-center text-muted small">
+                                                <i class="bi bi-calendar-event me-2"></i>
+                                                @appt.ScheduledDateTime.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(appt.ZoomMeetingUrl))
+                                            {
+                                                <a class="btn btn-sm btn-outline-primary w-100 mt-1" href="@appt.ZoomMeetingUrl" target="_blank">
+                                                    <i class="bi bi-box-arrow-up-right me-1"></i> Join Meeting
+                                                </a>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p>No upcoming consultations scheduled.</p>
+                        }
+                    </div>
+                </div>
+
+                <div class="mt-4 dashboard-actions">
+                    <button class="btn btn-primary" @onclick="RefreshDashboard">
+                        <span class="bi bi-arrow-clockwise mr-2"></span> Refresh Data
+                    </button>
+                    <button class="btn btn-outline-secondary ms-2" @onclick="DownloadPdfAsync" disabled="@isDownloadingPdf">
+                        <i class="bi bi-file-earmark-pdf me-2"></i> @(isDownloadingPdf ? "Downloading..." : "Download PDF Report")
+                    </button>
+                    @if (!SelectedPatientIdParam.HasValue)
+                    {
+                        <button class="btn btn-secondary ms-2" @onclick="CloseDashboard">Go Back</button>
+                    }
+                    else
+                    {
+                        <a class="btn btn-secondary ms-2" href="/caregiver/dashboard">Go Back</a>
+                    }
+                </div>
+            </div>
+        }
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public Guid? SelectedPatientIdParam { get; set; }
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private List<CaregiverPatientLinkResponse> links = [];
+    private CaregiverMonitoringDashboardResponse? dashboardData;
+    private Guid? selectedPatientId;
+    private int selectedWindowDays = 30;
+    
+    private int SelectedWindowDays
+    {
+        get => selectedWindowDays;
+        set
+        {
+            if (selectedWindowDays != value)
+            {
+                selectedWindowDays = value;
+                var targetId = SelectedPatientIdParam ?? selectedPatientId;
+                if (targetId.HasValue)
+                {
+                    _ = ViewPatientDashboard(targetId.Value);
+                }
+            }
+        }
+    }
+    
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isDownloadingPdf;
+    private bool isAuthorized;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (isAuthorized)
+        {
+            if (SelectedPatientIdParam.HasValue)
+            {
+                await ViewPatientDashboard(SelectedPatientIdParam.Value);
+            }
+            else
+            {
+                selectedPatientId = null;
+                dashboardData = null;
+                await LoadLinksAsync();
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            var role = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_role");
+            
+            if (string.IsNullOrWhiteSpace(token) || role != "Caregiver")
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            isAuthorized = true;
+
+            if (SelectedPatientIdParam.HasValue)
+            {
+                await ViewPatientDashboard(SelectedPatientIdParam.Value);
+            }
+            else
+            {
+                await LoadLinksAsync();
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadLinksAsync(bool showLoading = true)
+    {
+        if (showLoading) isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token)) return;
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Caregiver/links/caregiver");
+
+            if (!response.IsSuccessStatusCode) return;
+
+            links = await response.Content.ReadFromJsonAsync<List<CaregiverPatientLinkResponse>>(JsonOptions) ?? [];
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApproveLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsync($"api/v1/Caregiver/links/{linkId}/approve", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Link approved successfully.";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task RejectLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var rejectRequest = new RejectCaregiverPatientLinkRequest { Reason = "Rejected by caregiver." };
+            var response = await http.PostAsJsonAsync($"api/v1/Caregiver/links/{linkId}/reject", rejectRequest);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Link rejected.";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task RevokeLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Caregiver/links/{linkId}/revoke");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Caregiver link revoked.";
+            if (selectedPatientId.HasValue) CloseDashboard();
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task ViewPatientDashboard(Guid patientId)
+    {
+        selectedPatientId = patientId;
+        dashboardData = null;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync($"api/v1/Caregiver/patients/{patientId}/dashboard?windowDays={selectedWindowDays}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            dashboardData = await response.Content.ReadFromJsonAsync<CaregiverMonitoringDashboardResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+    
+    private async Task RefreshDashboard()
+    {
+        if (selectedPatientId.HasValue)
+        {
+            await ViewPatientDashboard(selectedPatientId.Value);
+        }
+    }
+    
+    private async Task DownloadPdfAsync()
+    {
+        if (!selectedPatientId.HasValue) return;
+
+        isDownloadingPdf = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            // Default to current month/year for the caregiver download
+            var month = DateTime.Now.Month;
+            var year = DateTime.Now.Year;
+
+            var response = await http.GetAsync($"api/v1/Reports/monthly/pdf?month={month}&year={year}&patientId={selectedPatientId.Value}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                ShowError($"Could not generate PDF: {(int)response.StatusCode}. {body}");
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var base64 = Convert.ToBase64String(bytes);
+            var filename = $"ComplianceReport_{year}_{month:D2}.pdf";
+
+            await JS.InvokeVoidAsync("downloadFileFromBase64", base64, filename, "application/pdf");
+            statusMessage = $"{filename} downloaded successfully.";
+        }
+        catch (Exception ex)
+        {
+            ShowError("Error downloading PDF: " + ex.Message);
+        }
+        finally
+        {
+            isDownloadingPdf = false;
+        }
+    }
+    
+    private void CloseDashboard()
+    {
+        selectedPatientId = null;
+        dashboardData = null;
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        var error = await response.Content.ReadFromJsonAsync<CaregiverErrorResponse>(JsonOptions);
+        ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        LinkStatuses.Pending => "badge-warning",
+        LinkStatuses.Approved => "badge-success",
+        LinkStatuses.Rejected or LinkStatuses.Revoked => "badge-danger",
+        _ => "badge-secondary"
+    };
+}

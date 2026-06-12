@@ -1,0 +1,127 @@
+@page "/patient/interaction-reports"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Saved Interaction Reports</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold" style="color: #2c3e50;">Saved Interaction Reports</h2>
+            <p class="text-muted">Review your previously saved drug interaction checks.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    @if (isLoading)
+    {
+        <p>Loading reports...</p>
+    }
+    else if (reports == null || reports.Count == 0)
+    {
+        <p class="text-muted">No saved reports found.</p>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var report in reports)
+            {
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="card-body">
+                            <h5 class="card-title fw-bold">Query: @report.QueryDrugName</h5>
+                            <h6 class="card-subtitle mb-2 text-muted">@report.GeneratedAt.ToString("MMM dd, yyyy HH:mm")</h6>
+                            
+                            <p class="mb-1"><strong>Severity:</strong> 
+                                <span class="badge @(GetSeverityBadge(report.SeverityLevel))">@report.SeverityLevel</span>
+                            </p>
+                            
+                            <p class="small mb-2"><strong>Compared against:</strong> @report.ExistingDrugNames</p>
+                            
+                            <div class="alert alert-secondary py-2 small mb-0">
+                                @report.ExplanationText
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private List<InteractionReportDto>? reports;
+    private string? token;
+    private string? errorMessage;
+    private bool isLoading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadReportsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadReportsAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
+
+            var response = await http.GetAsync("api/openfda/drugs/reports");
+            if (response.IsSuccessStatusCode)
+            {
+                reports = await response.Content.ReadFromJsonAsync<List<InteractionReportDto>>(JsonOptions);
+            }
+            else
+            {
+                errorMessage = "Failed to load reports.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetSeverityBadge(string severity) => severity switch
+    {
+        "Minor" => "bg-info",
+        "Moderate" => "bg-warning",
+        "Major" => "bg-danger",
+        "Contraindicated" => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    public class InteractionReportDto
+    {
+        public Guid ReportId { get; set; }
+        public string QueryDrugName { get; set; } = string.Empty;
+        public string ExistingDrugNames { get; set; } = string.Empty;
+        public string SeverityLevel { get; set; } = string.Empty;
+        public string ExplanationText { get; set; } = string.Empty;
+        public DateTime GeneratedAt { get; set; }
+    }
+}

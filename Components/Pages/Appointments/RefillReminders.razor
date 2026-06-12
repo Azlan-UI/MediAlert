@@ -1,0 +1,193 @@
+@page "/appointments/refills"
+@attribute [Authorize(Roles = "Patient")]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Appointments
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Refill Reminders</PageTitle>
+
+<section class="refills-page">
+    <div class="refills-panel">
+        <div class="refills-header">
+            <h1>Refill Reminder Center</h1>
+            <p class="text-muted">Manage your medication refills and stay on track.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="actions-section">
+            <button class="btn btn-primary" @onclick="GenerateRefillsAsync" disabled="@isGenerating">
+                @(isGenerating ? "Checking..." : "Check for Needed Refills")
+            </button>
+            <p class="small-text mt-2">This will scan your active medications and generate reminders for any that are running low.</p>
+        </div>
+
+        <div class="list-section">
+            <h2>Active Refill Reminders</h2>
+
+
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Medication</th>
+                        <th>Reminder Date</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (refills == null || !refills.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">No refill reminders found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var refill in refills)
+                        {
+                            <tr>
+                                <td>@refill.MedicationName</td>
+                                <td>@refill.ReminderDate.ToString("d")</td>
+                                <td><span class="badge @(refill.Status == "Pending" ? "badge-warning" : "badge-success")">@refill.Status</span></td>
+                                <td>
+                                    @if (refill.Status == "Pending")
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => AcknowledgeRefillAsync(refill.ReminderId)">Acknowledge</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isGenerating;
+
+    private List<RefillReminderDto> refills = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadRefillsAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadRefillsAsync()
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Appointments/refills");
+            if (response.IsSuccessStatusCode)
+            {
+                refills = await response.Content.ReadFromJsonAsync<List<RefillReminderDto>>(JsonOptions) ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task GenerateRefillsAsync()
+    {
+        isGenerating = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsync("api/v1/Appointments/refills/generate", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Successfully checked for refills. Any new reminders have been generated.";
+            await LoadRefillsAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isGenerating = false;
+        }
+    }
+
+    private async Task AcknowledgeRefillAsync(Guid reminderId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PutAsync($"api/v1/Appointments/refills/{reminderId}/acknowledge", null);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            var item = refills.FirstOrDefault(r => r.ReminderId == reminderId);
+            if (item != null)
+            {
+                item.Status = "Acknowledged";
+            }
+            
+            statusMessage = "Refill reminder acknowledged.";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        var error = await response.Content.ReadFromJsonAsync<AppointmentsErrorResponse>(JsonOptions);
+        ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+
+}

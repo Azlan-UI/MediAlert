@@ -1,0 +1,283 @@
+@using MediAlert.DTOs.Notifications
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Net.Http.Json
+@inject NavigationManager Navigation
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JS
+@inject MediAlert.Services.Notifications.NotificationNotifier Notifier
+@implements IAsyncDisposable
+
+<div class="notification-container" @onclick:stopPropagation>
+    <div class="bell-icon" @onclick="ToggleDropdown">
+        <i class="bi bi-bell-fill"></i>
+        @if (unreadCount > 0)
+        {
+            <span class="badge rounded-pill bg-danger notification-badge">
+                @(unreadCount > 99 ? "99+" : unreadCount)
+            </span>
+        }
+    </div>
+
+    @if (isDropdownOpen)
+    {
+        <div class="notification-dropdown shadow-lg">
+            <div class="dropdown-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold">Notifications</h6>
+                @if (unreadCount > 0)
+                {
+                    <button class="btn btn-sm btn-link text-decoration-none px-0" @onclick="MarkAllAsRead">
+                        Mark all read
+                    </button>
+                }
+            </div>
+            
+            <div class="dropdown-body">
+                @if (isLoading)
+                {
+                    <div class="text-center p-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                }
+                else if (notifications.Count == 0)
+                {
+                    <div class="text-center p-4 text-muted">
+                        <i class="bi bi-bell-slash fs-2 mb-2 d-block"></i>
+                        <small>No notifications yet</small>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var notification in notifications)
+                    {
+                        <div class="notification-item @(notification.IsRead ? "read" : "unread")" 
+                             @onclick="() => HandleNotificationClick(notification)">
+                            <div class="notification-icon bg-light-@GetColorClass(notification.Type)">
+                                <i class="bi @GetIconClass(notification.Type) text-@GetColorClass(notification.Type)"></i>
+                            </div>
+                            <div class="notification-content">
+                                <p class="notification-title mb-0">@notification.Title</p>
+                                <p class="notification-message text-muted mb-1 small">@notification.Message</p>
+                                <small class="text-muted" style="font-size: 0.7rem;">@GetTimeAgo(notification.CreatedAt)</small>
+                            </div>
+                            @if (!notification.IsRead)
+                            {
+                                <div class="unread-dot"></div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            
+            <div class="dropdown-footer text-center">
+                <a href="javascript:void(0)" class="text-decoration-none small text-muted">View all history</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isDropdownOpen = false;
+    private bool isLoading = true;
+    private int unreadCount = 0;
+    private List<NotificationResponse> notifications = new();
+    private HubConnection? hubConnection;
+    private HttpClient? httpClient;
+    private string? currentUserId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                httpClient = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+                var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+                
+                if (!string.IsNullOrEmpty(token))
+                {
+                    httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    
+                    try
+                    {
+                        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                        var jwtSecurityToken = handler.ReadJwtToken(token);
+                        currentUserId = jwtSecurityToken.Claims.FirstOrDefault(c => c.Type == System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value 
+                                     ?? jwtSecurityToken.Claims.FirstOrDefault(c => c.Type == "userId")?.Value;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error decoding token: {ex.Message}");
+                    }
+
+                    await LoadNotifications();
+                    
+                    Notifier.OnNotificationReceived += HandleInMemoryNotification;
+                    
+                    try
+                    {
+                        await ConnectToSignalR(token);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"SignalR connection failed: {ex.Message}. Using in-memory notifier fallback.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error init: {ex.Message}");
+            }
+        }
+    }
+
+    private void HandleInMemoryNotification(string userId, NotificationResponse notification)
+    {
+        if (userId == currentUserId)
+        {
+            InvokeAsync(() =>
+            {
+                if (notifications.All(n => n.NotificationId != notification.NotificationId))
+                {
+                    notifications.Insert(0, notification);
+                    if (notifications.Count > 10) notifications.RemoveAt(notifications.Count - 1);
+                    unreadCount++;
+                    StateHasChanged();
+                }
+            });
+        }
+    }
+
+    private async Task LoadNotifications()
+    {
+        try
+        {
+            isLoading = true;
+            var response = await httpClient!.GetFromJsonAsync<List<NotificationResponse>>("api/v1/Notification/all?limit=10");
+            if (response != null)
+            {
+                notifications = response;
+                unreadCount = notifications.Count(n => !n.IsRead);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading notifications: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConnectToSignalR(string token)
+    {
+        var absoluteUrl = Navigation.ToAbsoluteUri("/hubs/notifications");
+        
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(absoluteUrl, options =>
+            {
+                options.AccessTokenProvider = () => Task.FromResult(token)!;
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<NotificationResponse>("ReceiveNotification", (notification) =>
+        {
+            InvokeAsync(() =>
+            {
+                if (notifications.All(n => n.NotificationId != notification.NotificationId))
+                {
+                    notifications.Insert(0, notification);
+                    if (notifications.Count > 10) notifications.RemoveAt(notifications.Count - 1);
+                    unreadCount++;
+                    StateHasChanged();
+                }
+            });
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private void ToggleDropdown()
+    {
+        isDropdownOpen = !isDropdownOpen;
+    }
+
+    private async Task HandleNotificationClick(NotificationResponse notification)
+    {
+        if (!notification.IsRead)
+        {
+            notification.IsRead = true;
+            unreadCount = Math.Max(0, unreadCount - 1);
+            try
+            {
+                await httpClient!.PostAsync($"api/v1/Notification/{notification.NotificationId}/read", null);
+            }
+            catch (Exception ex) { Console.WriteLine($"Error marking read: {ex.Message}"); }
+        }
+
+        isDropdownOpen = false;
+        if (!string.IsNullOrEmpty(notification.ActionUrl))
+        {
+            Navigation.NavigateTo(notification.ActionUrl);
+        }
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        foreach (var n in notifications) n.IsRead = true;
+        unreadCount = 0;
+        try
+        {
+            await httpClient!.PostAsync("api/v1/Notification/read-all", null);
+        }
+        catch (Exception ex) { Console.WriteLine($"Error marking all read: {ex.Message}"); }
+    }
+
+    private string GetIconClass(string type) => type switch
+    {
+        "Billing" => "bi-credit-card",
+        "Consultation" => "bi-camera-video",
+        "Medication" => "bi-capsule",
+        "Profile" => "bi-person-badge",
+        "System" => "bi-info-circle",
+        _ => "bi-bell"
+    };
+
+    private string GetColorClass(string type) => type switch
+    {
+        "Billing" => "success",
+        "Consultation" => "primary",
+        "Medication" => "warning",
+        "Profile" => "info",
+        "System" => "secondary",
+        _ => "primary"
+    };
+
+    private string GetTimeAgo(DateTime createdAt)
+    {
+        var span = DateTime.UtcNow - createdAt;
+        if (span.TotalMinutes < 1) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        return createdAt.ToString("MMM dd");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            Notifier.OnNotificationReceived -= HandleInMemoryNotification;
+        }
+        catch {}
+
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

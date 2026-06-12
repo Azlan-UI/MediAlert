@@ -1,0 +1,318 @@
+@page "/doctor/dashboard"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Doctors
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Doctor Dashboard</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold" style="color: #2c3e50;">Doctor Dashboard</h2>
+            <p class="text-muted">Welcome to your practice overview.</p>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading your dashboard...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        </div>
+    }
+    else if (requiresSubscription)
+    {
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-lock-fill text-warning" style="font-size: 4rem;"></i>
+            </div>
+            <h3>Subscription Required</h3>
+            <p class="text-muted mb-4">You need an active Premium subscription to access the doctor dashboard and conduct consultations.</p>
+            <button class="btn btn-primary btn-lg" @onclick="SubscribeNowAsync" disabled="@isSubscribing">
+                @if (isSubscribing)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Redirecting...</span>
+                }
+                else
+                {
+                    <i class="bi bi-credit-card me-2"></i> <span>Subscribe Now ($99/mo)</span>
+                }
+            </button>
+        </div>
+    }
+    else if (dashboardData != null)
+    {
+        @if (dashboardData.VerificationStatus == "Pending")
+        {
+            <div class="alert alert-warning d-flex align-items-center" role="alert">
+                <i class="bi bi-hourglass-split fs-4 me-3"></i>
+                <div>
+                    <strong>Verification Pending</strong>
+                    <br />Your professional profile is currently under review by our administrators. You will not appear in patient search results until verified.
+                </div>
+            </div>
+        }
+        else if (dashboardData.VerificationStatus == "Rejected")
+        {
+            <div class="alert alert-danger d-flex align-items-center" role="alert">
+                <i class="bi bi-x-circle-fill fs-4 me-3"></i>
+                <div>
+                    <strong>Verification Rejected</strong>
+                    <br />Your professional profile was rejected. Reason: <em>@(dashboardData.RejectionReason ?? "No reason provided.")</em>
+                </div>
+            </div>
+        }
+        else if (dashboardData.VerificationStatus == "Verified")
+        {
+            <div class="alert alert-success d-flex align-items-center" role="alert">
+                <i class="bi bi-check-circle-fill fs-4 me-3"></i>
+                <div>
+                    <strong>Profile Verified</strong>
+                    <br />Your profile is active and patients can book appointments with you.
+                </div>
+            </div>
+        }
+
+        <div class="row g-4 mb-4">
+            <!-- KPIs -->
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4 d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 me-3 text-primary">
+                            <i class="bi bi-calendar-check fs-2"></i>
+                        </div>
+                        <div>
+                            <p class="text-muted mb-1 text-uppercase fw-semibold" style="font-size: 0.8rem;">Today's Appointments</p>
+                            <h3 class="mb-0 fw-bold">@dashboardData.TodaysAppointmentsCount</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4 d-flex align-items-center">
+                        <div class="bg-warning bg-opacity-10 rounded-circle p-3 me-3 text-warning">
+                            <i class="bi bi-hourglass-split fs-2"></i>
+                        </div>
+                        <div>
+                            <p class="text-muted mb-1 text-uppercase fw-semibold" style="font-size: 0.8rem;">Pending Consultations</p>
+                            <h3 class="mb-0 fw-bold">@dashboardData.PendingConsultationsCount</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body p-4 d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3 me-3 text-success">
+                            <i class="bi bi-people fs-2"></i>
+                        </div>
+                        <div>
+                            <p class="text-muted mb-1 text-uppercase fw-semibold" style="font-size: 0.8rem;">Total Patients</p>
+                            <h3 class="mb-0 fw-bold">@dashboardData.TotalPatientsCount</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4">
+                <h5 class="fw-bold mb-0">Upcoming Schedule</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="px-4 py-3">Patient</th>
+                                <th class="py-3">Date & Time</th>
+                                <th class="py-3">Type</th>
+                                <th class="py-3">Status</th>
+                                <th class="text-end px-4 py-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (!dashboardData.UpcomingAppointments.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">No upcoming appointments scheduled.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var apt in dashboardData.UpcomingAppointments)
+                                {
+                                    <tr>
+                                        <td class="px-4 py-3 fw-medium">@apt.PatientFullName</td>
+                                        <td class="py-3">@apt.ScheduledTime.ToLocalTime().ToString("MMM dd, yyyy h:mm tt")</td>
+                                        <td class="py-3">
+                                            <span class="badge bg-secondary">@apt.Type</span>
+                                        </td>
+                                        <td class="py-3">
+                                            <span class="badge @(apt.Status == "Scheduled" ? "bg-primary" : "bg-success")">@apt.Status</span>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(apt.ZoomMeetingUrl))
+                                            {
+                                                <a href="@apt.ZoomMeetingUrl" target="_blank" class="btn btn-sm btn-outline-primary me-2">Join Video</a>
+                                            }
+                                            <a href="/doctor/consultations/@apt.ConsultationId" class="btn btn-sm btn-outline-primary">View Details</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private string? errorMessage;
+    private DoctorDashboardResponse? dashboardData;
+    private bool requiresSubscription = false;
+    private bool isSubscribing = false;
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "session_id")]
+    public string? SessionId { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!string.IsNullOrEmpty(SessionId))
+            {
+                await VerifyCheckoutSessionAsync(SessionId);
+            }
+            await LoadDashboardDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task VerifyCheckoutSessionAsync(string sessionId)
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            var res = await http.PostAsync($"api/v1/doctors/subscription/verify?sessionId={sessionId}", null);
+            
+            if (!res.IsSuccessStatusCode)
+            {
+                var errorBody = await res.Content.ReadAsStringAsync();
+                errorMessage = $"Verification failed ({res.StatusCode}): {errorBody}";
+            }
+        }
+        catch (Exception ex) 
+        { 
+            errorMessage = $"Verification exception: {ex.Message}";
+        }
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            if (string.IsNullOrEmpty(token))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await http.GetAsync("api/v1/doctors/dashboard");
+            if (response.IsSuccessStatusCode)
+            {
+                dashboardData = await response.Content.ReadFromJsonAsync<DoctorDashboardResponse>();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.PaymentRequired)
+            {
+                requiresSubscription = true;
+            }
+            else
+            {
+                errorMessage = "Failed to load dashboard data. Please try again later.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SubscribeNowAsync()
+    {
+        isSubscribing = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Using the new doctor checkout endpoint
+            var request = new MediAlert.DTOs.Billing.CreateSubscriptionCheckoutRequest 
+            { 
+                Tier = "Premium",
+                SuccessUrl = Navigation.BaseUri.TrimEnd('/') + "/doctor/dashboard?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+                CancelUrl = Navigation.BaseUri.TrimEnd('/') + "/doctor/dashboard?checkout=cancelled"
+            };
+            var response = await http.PostAsJsonAsync("api/v1/doctors/subscription/checkout", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var checkoutResponse = await response.Content.ReadFromJsonAsync<MediAlert.DTOs.Billing.CheckoutSessionResponse>();
+                if (checkoutResponse != null && !string.IsNullOrEmpty(checkoutResponse.CheckoutUrl))
+                {
+                    Navigation.NavigateTo(checkoutResponse.CheckoutUrl);
+                }
+                else
+                {
+                    errorMessage = "Invalid checkout response from server.";
+                }
+            }
+            else
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                errorMessage = $"Failed to create checkout session. {errorBody}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred connecting to the billing service: {ex.Message}";
+        }
+        finally
+        {
+            isSubscribing = false;
+            StateHasChanged();
+        }
+    }
+}

@@ -1,0 +1,249 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<div class="brand-header">
+    <a class="brand-header-logo" href="">
+        <span class="bi bi-heart-pulse-fill brand-icon"></span>
+        <h2>MediAlert</h2>
+    </a>
+</div>
+
+<div class="nav-scrollable">
+    <nav class="nav flex-column">
+        <AuthorizeView>
+            <NotAuthorized>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="SignUp">
+                        <span class="bi bi-person-badge-fill" aria-hidden="true"></span> Sign Up
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="login">
+                        <span class="bi bi-person-badge-fill" aria-hidden="true"></span> Login
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Patient">
+            <Authorized>
+                <div class="nav-section-title">
+                    Patient
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/dashboard">
+                        <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+
+                <div class="nav-section-title">
+                    My Health
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/medicines">
+                        <span class="bi bi-capsule" aria-hidden="true"></span> Medications
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/compliance-test">
+                        <span class="bi bi-journal-medical" aria-hidden="true"></span> Intake Logs
+                    </NavLink>
+                </div>
+
+                <div class="nav-section-title">
+                    Safety
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/interaction-checker">
+                        <span class="bi bi-shield-check" aria-hidden="true"></span> Interaction Checker
+                    </NavLink>
+                </div>
+
+                <div class="nav-section-title">
+                    Care Network
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/caregivers">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> Caregivers
+                    </NavLink>
+                </div>
+                <AuthorizeView Roles="Patient">
+                    <Authorized Context="premiumCareNetwork">
+                        <div class="nav-item px-2">
+                            <NavLink class="nav-link" href="doctors">
+                                <span class="bi bi-heart-pulse-fill" aria-hidden="true"></span> Doctors
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-2">
+                            <NavLink class="nav-link" href="consultations">
+                                <span class="bi bi-camera-video-fill" aria-hidden="true"></span> Consultations
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="nav-section-title">
+                    Calendar
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="patient/calendar">
+                        <span class="bi bi-calendar-event-fill" aria-hidden="true"></span> Unified Calendar
+                    </NavLink>
+                </div>
+                <AuthorizeView Roles="Patient">
+                    <Authorized Context="premiumCalendar">
+                        <div class="nav-item px-2">
+                            <NavLink class="nav-link" href="appointments/calendar">
+                                <span class="bi bi-calendar-plus" aria-hidden="true"></span> Appointments
+                            </NavLink>
+                        </div>
+                        <div class="nav-item px-2">
+                            <NavLink class="nav-link" href="appointments/refills">
+                                <span class="bi bi-prescription2" aria-hidden="true"></span> Refill Reminders
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="nav-section-title">
+                    Analytics & Premium
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="reports/dashboard">
+                        <span class="bi bi-graph-up" aria-hidden="true"></span> Reports
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="reports/pdf">
+                        <span class="bi bi-file-earmark-pdf" aria-hidden="true"></span> Export PDF
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="billing/dashboard">
+                        <span class="bi bi-star-fill text-warning" aria-hidden="true"></span> Subscription
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="billing/upgrade">
+                        <span class="bi bi-arrow-up-circle text-warning" aria-hidden="true"></span> Upgrade Tier
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="billing/history">
+                        <span class="bi bi-receipt" aria-hidden="true"></span> Billing History
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Caregiver">
+            <Authorized>
+                <div class="nav-section-title">
+                    Caregiver
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="caregiver/dashboard">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> My Patients
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Doctor">
+            <Authorized>
+                <div class="nav-section-title">
+                    Doctor
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="doctor/dashboard">
+                        <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="doctor/availability">
+                        <span class="bi bi-calendar-check" aria-hidden="true"></span> Availability
+                    </NavLink>
+                </div>
+                <div class="nav-section-title mt-3">
+                    Premium
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="billing/dashboard">
+                        <span class="bi bi-star-fill text-warning" aria-hidden="true"></span> Subscription
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="billing/history">
+                        <span class="bi bi-receipt" aria-hidden="true"></span> Billing History
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-section-title">
+                    Admin Panel
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="admin/dashboard">
+                        <span class="bi bi-speedometer2" aria-hidden="true"></span> Dashboard
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="admin/users">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> Users
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="admin/doctors">
+                        <span class="bi bi-heart-pulse-fill" aria-hidden="true"></span> Doctors
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="admin/consultations">
+                        <span class="bi bi-camera-video-fill" aria-hidden="true"></span> Consultations
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <NavLink class="nav-link" href="admin/subscriptions">
+                        <span class="bi bi-star-fill" aria-hidden="true"></span> Subscriptions
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-2 mt-4">
+                    <NavLink class="nav-link" href="profile">
+                        <span class="bi bi-person-fill" aria-hidden="true"></span> My Profile
+                    </NavLink>
+                </div>
+                <div class="nav-item px-2">
+                    <button class="nav-link btn btn-link" @onclick="HandleLogout">
+                        <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Logout
+                    </button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+    </nav>
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task HandleLogout()
+    {
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_token");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_user_id");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_role");
+        await JS.InvokeVoidAsync("localStorage.removeItem", "medialert_full_name");
+        
+        ((MediAlert.Providers.JwtAuthenticationStateProvider)AuthStateProvider).NotifyUserLogout();
+        Navigation.NavigateTo("/login");
+    }
+}

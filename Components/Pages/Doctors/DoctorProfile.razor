@@ -1,0 +1,341 @@
+@page "/doctors/{DoctorId:guid}"
+@page "/doctors/{DoctorId:guid}/book"
+@attribute [Authorize(Roles = "Patient")]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Doctors
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Doctor Profile</PageTitle>
+
+<section class="profile-page">
+    @if (isLoading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading doctor profile...</p>
+        </div>
+    }
+    else if (doctor == null)
+    {
+        <div class="alert alert-error">Doctor not found or an error occurred.</div>
+    }
+    else
+    {
+        <div class="profile-container">
+            <div class="profile-sidebar">
+                @if (!string.IsNullOrEmpty(doctor.ProfilePhotoUrl))
+                {
+                    <img src="@doctor.ProfilePhotoUrl" alt="Dr. @doctor.FullName" class="doctor-avatar-large" style="object-fit: cover; width: 100px; height: 100px; border-radius: 50%; margin-bottom: 1rem; border: 2px solid var(--primary);" />
+                }
+                else
+                {
+                    <div class="doctor-avatar-large">
+                        @doctor.FullName.Substring(0, 1)
+                    </div>
+                }
+                <h2>Dr. @doctor.FullName</h2>
+                <p class="specialty-text">@doctor.Specialization</p>
+                
+                <div class="doctor-credentials mt-3 mb-3">
+                    <p class="mb-1"><i class="bi bi-award me-2"></i><strong>Qualifications:</strong> @doctor.Qualifications</p>
+                    <p class="mb-1"><i class="bi bi-card-heading me-2"></i><strong>License:</strong> @doctor.LicenseNumber</p>
+                    @if (!string.IsNullOrEmpty(doctor.ClinicName))
+                    {
+                        <p class="mb-1"><i class="bi bi-building me-2"></i><strong>Clinic:</strong> @doctor.ClinicName</p>
+                    }
+                    @if (!string.IsNullOrEmpty(doctor.ContactInfo))
+                    {
+                        <p class="mb-1"><i class="bi bi-telephone me-2"></i><strong>Contact:</strong> @doctor.ContactInfo</p>
+                    }
+                </div>
+                @if (doctor.IsVerified)
+                {
+                    <div class="verified-tag">
+                        <span class="icon">✓</span> Verified Professional
+                    </div>
+                }
+
+                <div class="stats-box">
+                    <div class="stat-item">
+                        <span class="stat-value">@doctor.ExperienceYears+</span>
+                        <span class="stat-label">Years Exp</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item">
+                        <span class="stat-value">@(doctor.RatingAverage?.ToString("0.0") ?? "N/A")</span>
+                        <span class="stat-label">Rating</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-main">
+                @if (!string.IsNullOrEmpty(doctor.Biography))
+                {
+                    <div class="bio-section mb-4" style="background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 2rem;">
+                        <h3 class="fw-bold mb-2" style="color: var(--white); font-size: 1.25rem;">Biography & About</h3>
+                        <p style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; margin-bottom: 0;">@doctor.Biography</p>
+                    </div>
+                }
+
+                <div class="booking-section">
+                    <h3>Book a Consultation</h3>
+                    <p class="subtitle">Select your preferred date, time, and consultation type.</p>
+
+                    @if (!string.IsNullOrEmpty(statusMessage))
+                    {
+                        <div class="alert @(isSuccess ? "alert-success" : "alert-error")">@statusMessage</div>
+                    }
+
+                    <div class="form-group">
+                        <label>Preferred Date</label>
+                        <input type="date" class="form-control" @bind="bookingDate" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Consultation Type</label>
+                        <select class="form-control" @bind="bookingType">
+                            <option value="Video Consultation">Video Consultation</option>
+                            <option value="Physical Consultation">Physical Consultation</option>
+                            <option value="Follow-Up Consultation">Follow-Up Consultation</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Time Slot</label>
+                        <select class="form-control" @bind="bookingTime">
+                            <option value="">Select a time...</option>
+                            @foreach (var slot in availableTimeSlots)
+                            {
+                                <option value="@slot.ToString("HH:mm")">@slot.ToString("h:mm tt")</option>
+                            }
+                        </select>
+                        @if (!availableTimeSlots.Any())
+                        {
+                            <small class="text-danger mt-1 d-block">No available slots on this date. Please try another day.</small>
+                        }
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Duration</label>
+                        <select class="form-control" @bind="bookingDuration">
+                            <option value="15">15 Minutes</option>
+                            <option value="30">30 Minutes</option>
+                            <option value="60">60 Minutes</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-primary btn-block" @onclick="BookConsultationAsync" disabled="@isBooking">
+                        @(isBooking ? "Confirming..." : "Confirm Booking")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    }
+</section>
+
+@code {
+    [Parameter]
+    public Guid DoctorId { get; set; }
+
+    private bool isLoading = true;
+    private DoctorResponse? doctor;
+    
+    // Booking Form
+    private DateTime _bookingDate = DateTime.Today.AddDays(1);
+    private DateTime bookingDate
+    {
+        get => _bookingDate;
+        set
+        {
+            if (_bookingDate != value)
+            {
+                _bookingDate = value;
+                _ = UpdateAvailableSlotsAsync();
+            }
+        }
+    }
+    
+    private string bookingTime = "";
+    private int bookingDuration = 30;
+    private string bookingType = "Video Consultation";
+    
+    private bool isBooking = false;
+    private string? statusMessage;
+    private bool isSuccess = false;
+
+    private List<DoctorAvailabilityResponse> availabilities = new();
+    private List<TimeOnly> availableTimeSlots = new();
+    private List<DateTime> bookedSlots = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDoctorProfileAsync();
+    }
+
+    private async Task LoadDoctorProfileAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Fetch doctor by ID directly using the single profile endpoint
+            var response = await httpClient.GetAsync($"/api/v1/Doctors/{DoctorId}");
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                doctor = JsonSerializer.Deserialize<DoctorResponse>(content, options);
+            }
+        }
+        catch (Exception)
+        {
+            // Ignore error for now
+        }
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var availabilityResponse = await httpClient.GetAsync($"/api/v1/Doctors/{DoctorId}/availability");
+            if (availabilityResponse.IsSuccessStatusCode)
+            {
+                var content = await availabilityResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var slots = JsonSerializer.Deserialize<List<DoctorAvailabilityResponse>>(content, options);
+                if (slots != null)
+                {
+                    availabilities = slots;
+                    await UpdateAvailableSlotsAsync();
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Ignored
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdateAvailableSlotsAsync()
+    {
+        availableTimeSlots.Clear();
+        bookingTime = "";
+        
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var bookedResponse = await httpClient.GetAsync($"/api/v1/Doctors/{DoctorId}/booked-slots?date={bookingDate:yyyy-MM-dd}");
+            if (bookedResponse.IsSuccessStatusCode)
+            {
+                var content = await bookedResponse.Content.ReadAsStringAsync();
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var bookedTimes = JsonSerializer.Deserialize<List<DateTime>>(content, options);
+                if (bookedTimes != null)
+                {
+                    bookedSlots = bookedTimes;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            bookedSlots.Clear();
+        }
+        
+        var dow = bookingDate.DayOfWeek;
+        var dayAvailabilities = availabilities.Where(a => a.DayOfWeek == (int)dow).ToList();
+        
+        foreach (var av in dayAvailabilities)
+        {
+            var start = av.StartTime;
+            while (start.Add(TimeSpan.FromMinutes(bookingDuration)) <= av.EndTime)
+            {
+                var slotDateTime = bookingDate.Date + start.ToTimeSpan();
+                
+                if (!bookedSlots.Any(b => Math.Abs((b - slotDateTime).TotalMinutes) < 1))
+                {
+                    availableTimeSlots.Add(start);
+                }
+                start = start.Add(TimeSpan.FromMinutes(bookingDuration));
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task BookConsultationAsync()
+    {
+        if (string.IsNullOrEmpty(bookingTime))
+        {
+            statusMessage = "Please select a time slot.";
+            isSuccess = false;
+            return;
+        }
+
+        isBooking = true;
+        statusMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(Navigation.BaseUri);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var scheduled = bookingDate.Date + TimeSpan.Parse(bookingTime);
+            var bookingRequest = new
+            {
+                DoctorId = DoctorId,
+                AppointmentType = bookingType,
+                ScheduledDateTime = scheduled,
+                DurationMinutes = bookingDuration
+            };
+
+            var response = await httpClient.PostAsJsonAsync("/api/v1/Appointments", bookingRequest);
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "Consultation booked successfully!";
+                isSuccess = true;
+            }
+            else
+            {
+                statusMessage = "Failed to book consultation. Please try again.";
+                isSuccess = false;
+            }
+        }
+        catch (Exception)
+        {
+            statusMessage = "Failed to book consultation.";
+            isSuccess = false;
+        }
+        finally
+        {
+            isBooking = false;
+            StateHasChanged();
+            
+            if (isSuccess)
+            {
+                await Task.Delay(2000);
+                Navigation.NavigateTo("/consultations");
+            }
+        }
+    }
+}
+

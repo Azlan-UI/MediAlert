@@ -1,0 +1,300 @@
+@page "/patient/compliance-report"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Compliance
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Compliance Report</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold text-dark mb-2">Compliance Report</h2>
+            <p class="text-muted">Generate detailed reports on your medication adherence.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(pageMessage))
+    {
+        <div class="alert @(hasError ? "alert-danger" : "alert-success") border-0 shadow-sm mb-4">
+            @pageMessage
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">Report Settings</h5>
+                    <EditForm Model="reportForm" OnValidSubmit="GenerateReportAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label for="periodStart" class="form-label fw-semibold">Period Start</label>
+                            <InputDate id="periodStart" class="form-control" @bind-Value="reportForm.PeriodStartDate" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="periodEnd" class="form-label fw-semibold">Period End</label>
+                            <InputDate id="periodEnd" class="form-control" @bind-Value="reportForm.PeriodEndDate" />
+                        </div>
+
+                        <div class="form-check mb-4">
+                            <InputCheckbox id="includeFda" class="form-check-input" @bind-Value="reportForm.IncludeOpenFdaSafetySummary" />
+                            <label class="form-check-label" for="includeFda">
+                                Include OpenFDA Safety Summary
+                            </label>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary rounded-pill py-2" disabled="@isGeneratingReport">
+                                @if (isGeneratingReport)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                }
+                                Generate Report
+                            </button>
+                            <button type="button" class="btn btn-light rounded-pill py-2" @onclick="GoBack">Back to Intake Logs</button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            @if (report is not null)
+            {
+                <div class="card border-0 shadow-sm rounded-4 mb-4 overflow-hidden">
+                    <div class="card-header bg-primary text-white p-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h4 class="mb-0 fw-bold text-white">Report Summary</h4>
+                                <small class="opacity-75">@reportForm.PeriodStartDate.ToShortDateString() - @reportForm.PeriodEndDate.ToShortDateString()</small>
+                            </div>
+                            <div class="display-4 fw-bold">@report.OverallCompliancePercentage%</div>
+                        </div>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="row g-4 text-center mb-4">
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-4">
+                                    <h3 class="text-success fw-bold mb-1">@report.TakenDoses</h3>
+                                    <span class="text-muted small text-uppercase">Taken</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-4">
+                                    <h3 class="text-warning fw-bold mb-1">@report.SkippedDoses</h3>
+                                    <span class="text-muted small text-uppercase">Skipped</span>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 bg-light rounded-4">
+                                    <h3 class="text-danger fw-bold mb-1">@report.MissedDoses</h3>
+                                    <span class="text-muted small text-uppercase">Missed</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info border-0 rounded-4 mb-4">
+                            <strong><i class="bi bi-lightbulb me-2"></i>Recommendation:</strong> @report.Recommendations
+                        </div>
+
+                        <h5 class="fw-bold mb-3">Per Medication Breakdown</h5>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Medication</th>
+                                        <th class="text-center">Compliance</th>
+                                        <th class="text-center">Taken</th>
+                                        <th class="text-center">Skipped</th>
+                                        <th class="text-center">Missed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var medication in report.MedicationSummaries)
+                                    {
+                                        <tr>
+                                            <td class="fw-semibold">@medication.DrugName</td>
+                                            <td class="text-center">
+                                                <div class="progress" style="height: 8px;">
+                                                    <div class="progress-bar @(medication.CompliancePercentage > 80 ? "bg-success" : medication.CompliancePercentage > 50 ? "bg-warning" : "bg-danger")" role="progressbar" style="width: @medication.CompliancePercentage%" aria-valuenow="@medication.CompliancePercentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <small class="text-muted">@medication.CompliancePercentage%</small>
+                                            </td>
+                                            <td class="text-center text-success">@medication.TakenDoses</td>
+                                            <td class="text-center text-warning">@medication.SkippedDoses</td>
+                                            <td class="text-center text-danger">@medication.MissedDoses</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @if (report.OpenFdaSafetySummaries.Count > 0)
+                {
+                    <h5 class="fw-bold mb-3">OpenFDA Safety Notes</h5>
+                    <div class="row g-3">
+                        @foreach (var safety in report.OpenFdaSafetySummaries)
+                        {
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm rounded-4 h-100 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold">@safety.DrugName</h6>
+                                        @if (!safety.RetrievedFromOpenFda)
+                                        {
+                                            <p class="text-danger small mb-0">@safety.ErrorMessage</p>
+                                        }
+                                        else
+                                        {
+                                            @if (safety.BrandNames.Count > 0)
+                                            {
+                                                <p class="small text-muted mb-2">Brands: @string.Join(", ", safety.BrandNames.Take(3))</p>
+                                            }
+                                            @if (safety.Warnings.Count > 0)
+                                            {
+                                                <div class="alert alert-warning py-2 mb-2 small border-0">
+                                                    <strong>Warning:</strong> @safety.Warnings[0]
+                                                </div>
+                                            }
+                                            @if (safety.DrugInteractions.Count > 0)
+                                            {
+                                                <div class="alert alert-danger py-2 mb-0 small border-0">
+                                                    <strong>Interaction:</strong> @safety.DrugInteractions[0]
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="card border-0 shadow-sm rounded-4 text-center py-5">
+                    <div class="card-body">
+                        <i class="bi bi-file-earmark-bar-graph display-1 text-muted opacity-25 mb-3"></i>
+                        <h5 class="text-muted">No Report Generated</h5>
+                        <p class="text-muted small mb-0">Use the settings panel to generate your compliance report.</p>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private string? token;
+    private string? pageMessage;
+    private bool hasError;
+    private bool isGeneratingReport;
+
+    private ComplianceReportResponse? report;
+    private Guid? patientId;
+
+    private readonly ReportForm reportForm = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            
+            // Need patient ID for report, fetching medicines is an easy way to get it
+            try
+            {
+                using var http = CreateHttpClient();
+                var response = await http.GetAsync("api/patient/medicines");
+                if (response.IsSuccessStatusCode)
+                {
+                    var meds = await response.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+                    patientId = meds?.PatientId;
+                }
+            }
+            catch { }
+
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateReportAsync()
+    {
+        if (patientId is null || patientId == Guid.Empty)
+        {
+            ShowError("No patient profile loaded. Please try again.");
+            return;
+        }
+
+        isGeneratingReport = true;
+        hasError = false;
+        pageMessage = null;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/compliance/reports/generate", new GenerateComplianceReportRequest
+            {
+                PatientId = patientId.Value,
+                PeriodStartDate = DateOnly.FromDateTime(reportForm.PeriodStartDate),
+                PeriodEndDate = DateOnly.FromDateTime(reportForm.PeriodEndDate),
+                IncludeOpenFdaSafetySummary = reportForm.IncludeOpenFdaSafetySummary,
+                PersistReport = true,
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                ShowError($"Failed to generate report. {(int)response.StatusCode}");
+                return;
+            }
+
+            report = await response.Content.ReadFromJsonAsync<ComplianceReportResponse>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isGeneratingReport = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        pageMessage = message;
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/patient/compliance-test");
+    }
+
+    private sealed class ReportForm
+    {
+        public DateTime PeriodStartDate { get; set; } = DateTime.Today.AddDays(-7);
+        public DateTime PeriodEndDate { get; set; } = DateTime.Today;
+        public bool IncludeOpenFdaSafetySummary { get; set; } = true;
+    }
+}

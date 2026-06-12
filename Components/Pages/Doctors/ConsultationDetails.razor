@@ -1,0 +1,319 @@
+@page "/consultations/{ConsultationId:guid}"
+@page "/doctor/consultations/{ConsultationId:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Doctors
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Consultation Details</PageTitle>
+
+<div class="container-fluid py-4">
+    @if (isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading consultation details...</p>
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+        </div>
+    }
+    else if (consultation != null)
+    {
+        <div class="row mb-4 align-items-center">
+            <div class="col-md-8">
+                <h2 class="fw-bold" style="color: #2c3e50;">Consultation Details</h2>
+                <p class="text-muted">Review details and clinical notes for this session.</p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <span class="badge @GetStatusBadgeClass(consultation.Status) fs-6 px-3 py-2">@consultation.Status</span>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Column: Details & Notes -->
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="text-muted text-uppercase fw-semibold" style="font-size: 0.8rem;">Patient</h6>
+                                <div class="d-flex align-items-center mt-2">
+                                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                        @consultation.PatientFullName.Substring(0, 1)
+                                    </div>
+                                    <span class="fw-bold fs-5">@consultation.PatientFullName</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-muted text-uppercase fw-semibold" style="font-size: 0.8rem;">Doctor</h6>
+                                <div class="d-flex align-items-center mt-2">
+                                    <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                        @consultation.DoctorFullName.Substring(0, 1)
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold fs-5 d-block">Dr. @consultation.DoctorFullName</span>
+                                        <small class="text-muted">@consultation.DoctorSpecialization</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="text-muted opacity-25" />
+
+                        <div class="row mt-4">
+                            <div class="col-md-6 mb-3">
+                                <p class="text-muted mb-1 text-uppercase fw-semibold" style="font-size: 0.8rem;"><i class="bi bi-calendar-event me-2"></i>Scheduled For</p>
+                                <p class="fw-medium mb-0">@consultation.ScheduledTime.ToLocalTime().ToString("dddd, MMMM dd, yyyy")</p>
+                                <p class="fw-medium">@consultation.ScheduledTime.ToLocalTime().ToString("h:mm tt")</p>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <p class="text-muted mb-1 text-uppercase fw-semibold" style="font-size: 0.8rem;"><i class="bi bi-camera-video me-2"></i>Consultation Type</p>
+                                <p class="fw-medium">@consultation.Type</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clinical Notes Section -->
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white border-bottom-0 pt-4 pb-0 px-4 d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">Clinical Notes</h5>
+                        @if (isDoctorMode && !isEditingNotes)
+                        {
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => isEditingNotes = true">
+                                <i class="bi bi-pencil me-1"></i> Edit Notes
+                            </button>
+                        }
+                    </div>
+                    <div class="card-body p-4">
+                        @if (isEditingNotes)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Consultation Notes & Observations</label>
+                                <textarea class="form-control" rows="5" @bind="clinicalNotes"></textarea>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button class="btn btn-secondary" @onclick="CancelEditNotes" disabled="@isSavingNotes">Cancel</button>
+                                <button class="btn btn-primary" @onclick="SaveNotesAsync" disabled="@isSavingNotes">
+                                    @(isSavingNotes ? "Saving..." : "Save Notes")
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrEmpty(notesError))
+                            {
+                                <div class="text-danger mt-2 small">@notesError</div>
+                            }
+                        }
+                        else
+                        {
+                            @if (consultation.Note != null && !string.IsNullOrWhiteSpace(consultation.Note.DoctorObservations))
+                            {
+                                <div class="bg-light p-3 rounded border" style="white-space: pre-wrap;">@consultation.Note.DoctorObservations</div>
+                            }
+                            else
+                            {
+                                <p class="text-muted fst-italic">No clinical notes have been recorded for this consultation yet.</p>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Actions -->
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body p-4 text-center">
+                        <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 80px; height: 80px;">
+                            <i class="bi bi-camera-video-fill fs-1"></i>
+                        </div>
+                        <h5 class="fw-bold">Join Video Session</h5>
+                        <p class="text-muted small">Connect securely via Zoom at the scheduled time.</p>
+                        
+                        @if (!string.IsNullOrEmpty(consultation.ZoomMeetingUrl))
+                        {
+                            @if (isDoctorMode || hasPremiumAccess)
+                            {
+                                <a href="@consultation.ZoomMeetingUrl" target="_blank" class="btn btn-primary w-100 fw-semibold py-2 mt-2">
+                                    <i class="bi bi-box-arrow-up-right me-2"></i> Join Meeting
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning mt-2 small text-start">
+                                    <i class="bi bi-lock-fill me-1"></i> Joining video consultations is a Premium feature. Please upgrade your subscription to access this link.
+                                </div>
+                                <a href="/billing/upgrade" class="btn btn-warning w-100 fw-semibold py-2">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> Upgrade to Premium
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <button class="btn btn-secondary w-100 fw-semibold py-2 mt-2" disabled>
+                                No Link Available
+                            </button>
+                        }
+
+                        @if (isDoctorMode)
+                        {
+                            <hr class="my-4" />
+                            <h5 class="fw-bold mb-3">Patient Medical Profile</h5>
+                            <button class="btn btn-outline-info w-100 fw-semibold py-2" @onclick='() => Navigation.NavigateTo($"/doctor/patients/{consultation.PatientId}/profile")'>
+                                <i class="bi bi-file-medical me-2"></i> View Profile
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid ConsultationId { get; set; }
+
+    private bool isLoading = true;
+    private string? errorMessage;
+    private ConsultationDetailsResponse? consultation;
+
+    private bool isDoctorMode = false;
+    private bool isEditingNotes = false;
+    private bool isSavingNotes = false;
+    private string clinicalNotes = "";
+    private string? notesError;
+
+    private bool hasPremiumAccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isDoctorMode = authState.User.IsInRole("Doctor");
+        await LoadConsultationAsync();
+        if (!isDoctorMode)
+        {
+            await CheckPremiumAccessAsync();
+        }
+    }
+
+    private async Task CheckPremiumAccessAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            
+            var response = await http.GetAsync("/api/v1/billing/premium-access");
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<PremiumAccessCheckResult>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                hasPremiumAccess = result?.HasPremiumAccess ?? false;
+            }
+        }
+        catch
+        {
+            hasPremiumAccess = false;
+        }
+    }
+
+    private class PremiumAccessCheckResult
+    {
+        public bool HasPremiumAccess { get; set; }
+    }
+
+    private async Task LoadConsultationAsync()
+    {
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await http.GetAsync($"/api/v1/doctors/consultations/{ConsultationId}");
+            if (response.IsSuccessStatusCode)
+            {
+                consultation = await response.Content.ReadFromJsonAsync<ConsultationDetailsResponse>();
+                if (consultation?.Note != null)
+                {
+                    clinicalNotes = consultation.Note.DoctorObservations ?? "";
+                }
+            }
+            else
+            {
+                errorMessage = "Failed to load consultation details. You may not have permission to view this.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void CancelEditNotes()
+    {
+        isEditingNotes = false;
+        clinicalNotes = consultation?.Note?.DoctorObservations ?? "";
+        notesError = null;
+    }
+
+    private async Task SaveNotesAsync()
+    {
+        isSavingNotes = true;
+        notesError = null;
+        StateHasChanged();
+
+        try
+        {
+            var token = await JS.InvokeAsync<string>("localStorage.getItem", "medialert_token");
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            // Using the endpoint from AppointmentsController: POST /api/v1/Appointments/{appointmentId}/notes
+            var response = await http.PostAsJsonAsync($"/api/v1/Appointments/{ConsultationId}/notes", clinicalNotes);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                isEditingNotes = false;
+                await LoadConsultationAsync(); // Reload to get fresh note
+            }
+            else
+            {
+                notesError = "Failed to save notes.";
+            }
+        }
+        catch (Exception)
+        {
+            notesError = "An error occurred while saving.";
+        }
+        finally
+        {
+            isSavingNotes = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Scheduled" => "bg-primary",
+            "Completed" => "bg-success",
+            "Cancelled" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}

@@ -1,0 +1,236 @@
+@page "/patient/caregivers"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Caregiver
+@using MediAlert.Constants
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Manage Caregivers</PageTitle>
+
+<section class="caregiver-page">
+    <div class="caregiver-panel">
+        <div class="caregiver-header">
+            <p class="eyebrow">Patient Settings</p>
+            <h1>Manage Caregivers</h1>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(statusMessage))
+        {
+            <div class="status-box @(hasError ? "status-error" : "status-success")">@statusMessage</div>
+        }
+
+        <div class="request-link-section">
+            <h2>Request New Caregiver Link</h2>
+            <EditForm Model="requestModel" OnValidSubmit="RequestLinkAsync" class="caregiver-form">
+                <DataAnnotationsValidator />
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="caregiverEmail">Caregiver Email</label>
+                        <InputText id="caregiverEmail" class="form-control" @bind-Value="requestModel.CaregiverEmail" />
+                    </div>
+
+                    <div class="field-group">
+                        <label for="permissionLevel">Permission Level</label>
+                        <InputSelect id="permissionLevel" class="form-control" @bind-Value="requestModel.PermissionLevel">
+                            <option value="ReadOnly">ReadOnly</option>
+                            <option value="Write">Write</option>
+                        </InputSelect>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label for="relationship">Relationship</label>
+                    <InputText id="relationship" class="form-control" @bind-Value="requestModel.RelationshipToPatient" />
+                </div>
+
+                <button type="submit" class="btn btn-primary caregiver-button" disabled="@isSaving">
+                    @(isSaving ? "Sending Request..." : "Send Request")
+                </button>
+            </EditForm>
+        </div>
+
+        <div class="links-list">
+            <h2>Your Linked Caregivers</h2>
+
+            @if (isLoading)
+            {
+                <p>Loading your caregivers...</p>
+            }
+            else if (links.Count > 0)
+            {
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Caregiver Name</th>
+                            <th>Status</th>
+                            <th>Permission</th>
+                            <th>Requested At</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var link in links)
+                        {
+                            <tr>
+                                <td>@link.CaregiverFullName</td>
+                                <td><span class="badge @GetStatusClass(link.Status)">@link.Status</span></td>
+                                <td>@link.PermissionLevel</td>
+                                <td>@link.RequestedAt.ToString("g")</td>
+                                <td>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RevokeLinkAsync(link.LinkId)">Revoke</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+                <p>You have no linked caregivers.</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly CreateCaregiverPatientLinkRequest requestModel = new() { PermissionLevel = "ReadOnly" };
+    private List<CaregiverPatientLinkResponse> links = [];
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isSaving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            await LoadLinksAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task RequestLinkAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/v1/Caregiver/links/request", requestModel);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Caregiver request sent successfully.";
+            requestModel.CaregiverEmail = "";
+            requestModel.RelationshipToPatient = "";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task RevokeLinkAsync(Guid linkId)
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/Caregiver/links/{linkId}/revoke");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Caregiver link revoked.";
+            await LoadLinksAsync(false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task LoadLinksAsync(bool showLoading = true)
+    {
+        if (showLoading) isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token)) return;
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/Caregiver/links/patient");
+
+            if (!response.IsSuccessStatusCode) return;
+
+            links = await response.Content.ReadFromJsonAsync<List<CaregiverPatientLinkResponse>>(JsonOptions) ?? [];
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var error = await response.Content.ReadFromJsonAsync<CaregiverErrorResponse>(JsonOptions);
+            ShowError(error?.Message ?? $"Request failed with status {(int)response.StatusCode}.");
+        }
+        catch
+        {
+            ShowError($"Request failed with status {(int)response.StatusCode} ({(int)response.StatusCode}).");
+        }
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private string GetStatusClass(string status) => status switch
+    {
+        LinkStatuses.Pending => "badge-warning",
+        LinkStatuses.Approved => "badge-success",
+        LinkStatuses.Rejected or LinkStatuses.Revoked => "badge-danger",
+        _ => "badge-secondary"
+    };
+}

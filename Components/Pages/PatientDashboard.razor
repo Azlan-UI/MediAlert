@@ -1,0 +1,202 @@
+@page "/patient/dashboard"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.PatientMedications
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Patient Dashboard</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <p class="text-primary fw-bold text-uppercase tracking-wider mb-1" style="letter-spacing: 1.5px; font-size: 0.85rem;">Central Hub</p>
+            <h1 class="fw-bolder text-dark mb-2">Dashboard</h1>
+            <p class="text-muted mb-0">Welcome back! Here's your medication overview.</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+             <button class="btn btn-primary shadow-sm" @onclick="GoToMedicines">
+                <i class="bi bi-plus-lg me-1"></i> Add Medication
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert @(hasError ? "alert-danger" : "alert-success") border-0 shadow-sm mb-4">
+            @statusMessage
+        </div>
+    }
+
+    <div class="row g-4 mb-5">
+        <div class="col-xl-3 col-lg-4 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s;" @onclick="GoToMedicines" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div class="card-body">
+                    <div class="display-4 text-primary mb-3">@medicineCount</div>
+                    <h5 class="fw-bold">Medications</h5>
+                    <p class="text-muted small mb-0">Active medications</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-lg-4 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s;" @onclick="GoToCompliance" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div class="card-body">
+                    <div class="display-4 text-info mb-3"><i class="bi bi-check2-circle"></i></div>
+                    <h5 class="fw-bold">Compliance</h5>
+                    <p class="text-muted small mb-0">Log and track intake</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-lg-4 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s;" @onclick="GoToCaregivers" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div class="card-body">
+                    <div class="display-4 text-success mb-3"><i class="bi bi-people-fill"></i></div>
+                    <h5 class="fw-bold">Caregivers</h5>
+                    <p class="text-muted small mb-0">Manage access</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-lg-4 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s;" @onclick="GoToInteractionChecker" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                <div class="card-body">
+                    <div class="display-4 text-danger mb-3"><i class="bi bi-shield-check"></i></div>
+                    <h5 class="fw-bold">Safety</h5>
+                    <p class="text-muted small mb-0">Interaction Checker</p>
+                </div>
+            </div>
+        </div>
+
+        <AuthorizeView Roles="Patient">
+            <Authorized Context="premiumCards">
+                <div class="col-xl-3 col-lg-4 col-sm-6">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);" @onclick="GoToDoctors" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="card-body">
+                            <div class="display-4 text-success mb-3"><i class="bi bi-heart-pulse-fill"></i></div>
+                            <h5 class="fw-bold">Doctors</h5>
+                            <p class="text-muted small mb-0">Search & book specialists</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-lg-4 col-sm-6">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);" @onclick="GoToConsultations" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="card-body">
+                            <div class="display-4 text-success mb-3"><i class="bi bi-camera-video-fill"></i></div>
+                            <h5 class="fw-bold">Consultations</h5>
+                            <p class="text-muted small mb-0">My virtual consults</p>
+                        </div>
+                    </div>
+                </div>
+            </Authorized>
+            <NotAuthorized Context="freeCards">
+                <div class="col-xl-3 col-lg-4 col-sm-6">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s; background-color: #fffbeb;" @onclick="GoToBilling" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="card-body">
+                            <div class="display-4 text-warning mb-3"><i class="bi bi-lock-fill"></i></div>
+                            <h5 class="fw-bold">Doctors <span class="badge bg-warning text-dark ms-1 rounded-pill" style="font-size: 0.65rem;">Premium</span></h5>
+                            <p class="text-muted small mb-0">Unlock doctor search</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-lg-4 col-sm-6">
+                    <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-3" style="cursor: pointer; transition: transform 0.2s; background-color: #fffbeb;" @onclick="GoToBilling" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'">
+                        <div class="card-body">
+                            <div class="display-4 text-warning mb-3"><i class="bi bi-lock-fill"></i></div>
+                            <h5 class="fw-bold">Consultations <span class="badge bg-warning text-dark ms-1 rounded-pill" style="font-size: 0.65rem;">Premium</span></h5>
+                            <p class="text-muted small mb-0">Unlock virtual consults</p>
+                        </div>
+                    </div>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <h4 class="fw-bold mb-3">Quick Actions</h4>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-outline-primary rounded-pill px-4" @onclick="GoToCompliance">
+                    <i class="bi bi-journal-medical me-1"></i> Log Intake
+                </button>
+                <button class="btn btn-outline-primary rounded-pill px-4" @onclick="GoToReports">
+                    <i class="bi bi-graph-up me-1"></i> View Reports
+                </button>
+                <button class="btn btn-outline-primary rounded-pill px-4" @onclick="GoToCalendar">
+                    <i class="bi bi-calendar-event me-1"></i> Open Calendar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private int medicineCount;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+
+            // Request browser notification permission (FR09)
+            await JS.InvokeVoidAsync("mediAlertNotifications.requestPermission");
+
+            await LoadDashboardDataAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            using var http = CreateHttpClient();
+
+            var medResponse = await http.GetAsync("api/patient/medicines");
+            if (medResponse.IsSuccessStatusCode)
+            {
+                var meds = await medResponse.Content.ReadFromJsonAsync<PatientMedicationListResponse>(JsonOptions);
+                medicineCount = meds?.Medicines.Count ?? 0;
+            }
+        }
+        catch
+        {
+            statusMessage = "Could not load all dashboard data.";
+            hasError = true;
+        }
+    }
+
+    private void GoToMedicines() => Navigation.NavigateTo("/patient/medicines");
+    private void GoToCompliance() => Navigation.NavigateTo("/patient/compliance-test");
+    private void GoToCaregivers() => Navigation.NavigateTo("/patient/caregivers");
+    private void GoToInteractionChecker() => Navigation.NavigateTo("/patient/interaction-checker");
+    private void GoToReports() => Navigation.NavigateTo("/reports/dashboard");
+    private void GoToCalendar() => Navigation.NavigateTo("/patient/calendar");
+    private void GoToDoctors() => Navigation.NavigateTo("/doctors");
+    private void GoToConsultations() => Navigation.NavigateTo("/consultations");
+    private void GoToBilling() => Navigation.NavigateTo("/billing/upgrade");
+
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+}

@@ -1,0 +1,153 @@
+@page "/billing/history"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.Billing
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Billing History</PageTitle>
+
+<section class="billing-history-page">
+    <div class="page-header">
+        <button class="btn-back" @onclick='() => Navigation.NavigateTo("/billing/dashboard")'>Back to Dashboard</button>
+        <h1>Billing History</h1>
+        <p>View your subscription status, invoices, and payment history.</p>
+    </div>
+
+    <div class="history-card">
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading billing history...</p>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="alert alert-error">@errorMessage</div>
+        }
+        else
+        {
+            <div class="subscription-summary mb-4">
+                <h2>Current Subscription</h2>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr><th>Tier</th><th>Status</th><th>Next Billing</th><th>Action</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>@(subscription?.Tier ?? "Free")</strong></td>
+                                <td><span class="status-badge status-@DisplayStatus.ToLower()">@DisplayStatus</span></td>
+                                <td>@(subscription?.RenewalDate.HasValue == true ? subscription.RenewalDate.Value.ToString("MMM dd, yyyy") : "N/A")</td>
+                                <td>
+                                    <button class="btn-link" @onclick='() => Navigation.NavigateTo("/billing/dashboard")'>Manage Plan</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h2>Invoices</h2>
+            @if (invoices.Any())
+            {
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr><th>Date</th><th>Amount</th><th>Status</th><th>Paid</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var invoice in invoices)
+                            {
+                                <tr>
+                                    <td>@invoice.DueDate.ToString("MMM dd, yyyy")</td>
+                                    <td>@invoice.Currency @invoice.Amount.ToString("0.00")</td>
+                                    <td><span class="status-badge status-@invoice.Status.ToLower()">@invoice.Status</span></td>
+                                    <td>@(invoice.PaidDate.HasValue ? invoice.PaidDate.Value.ToString("MMM dd, yyyy") : "N/A")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info mt-3">No invoices have been recorded yet.</div>
+            }
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private bool isLoading = true;
+    private string? errorMessage;
+    private SubscriptionResponse? subscription;
+    private List<InvoiceSummaryResponse> invoices = [];
+
+    private string DisplayStatus =>
+        subscription?.Tier.Equals("Free", StringComparison.OrdinalIgnoreCase) == true
+            && subscription.Status.Equals("Active", StringComparison.OrdinalIgnoreCase)
+                ? "Free"
+                : subscription?.Status ?? "Free";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadBillingHistoryAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadBillingHistoryAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                errorMessage = "Authentication token missing. Please log in.";
+                return;
+            }
+
+            using var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var subscriptionResponse = await http.GetAsync("api/v1/Billing/subscription");
+            if (subscriptionResponse.IsSuccessStatusCode)
+            {
+                subscription = await subscriptionResponse.Content.ReadFromJsonAsync<SubscriptionResponse>(JsonOptions);
+            }
+            else if (subscriptionResponse.StatusCode != System.Net.HttpStatusCode.NotFound)
+            {
+                errorMessage = $"Could not load subscription info ({(int)subscriptionResponse.StatusCode}).";
+                return;
+            }
+
+            var invoiceResponse = await http.GetAsync("api/v1/Billing/invoices");
+            if (invoiceResponse.IsSuccessStatusCode)
+            {
+                invoices = await invoiceResponse.Content.ReadFromJsonAsync<List<InvoiceSummaryResponse>>(JsonOptions) ?? [];
+            }
+            else
+            {
+                errorMessage = $"Could not load invoices ({(int)invoiceResponse.StatusCode}).";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error loading billing history: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

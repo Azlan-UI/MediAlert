@@ -1,0 +1,288 @@
+@page "/patient/health-profile"
+@rendermode InteractiveServer
+@using System.Net.Http.Headers
+@using System.Text.Json
+@using MediAlert.DTOs.HealthProfile
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Health Profile</PageTitle>
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="fw-bold text-dark mb-2">Health Profile</h2>
+            <p class="text-muted">Manage your diagnosed conditions and health notes.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(statusMessage))
+    {
+        <div class="alert @(hasError ? "alert-danger" : "alert-success") border-0 shadow-sm mb-4">
+            @statusMessage
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- Add Condition Form Column -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0">
+                    <h5 class="fw-bold mb-0">Add Condition</h5>
+                </div>
+                <div class="card-body p-4">
+                    <EditForm Model="conditionForm" OnValidSubmit="AddConditionAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label for="conditionName" class="form-label fw-semibold">Condition Name</label>
+                            <InputText id="conditionName" class="form-control" @bind-Value="conditionForm.ConditionName" placeholder="e.g. Type 2 Diabetes" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="diagnosedDate" class="form-label fw-semibold">Diagnosed Date (Optional)</label>
+                            <InputDate id="diagnosedDate" class="form-control" @bind-Value="conditionForm.DiagnosedDate" />
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="notes" class="form-label fw-semibold">Notes</label>
+                            <InputTextArea id="notes" class="form-control" @bind-Value="conditionForm.Notes" placeholder="Additional details..." rows="3" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill py-2" disabled="@isSaving">
+                            @if (isSaving)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            }
+                            Save Condition
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conditions List Column -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-transparent border-bottom-0 pt-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">Your Health Conditions</h5>
+                    <span class="badge bg-primary rounded-pill">@(conditions?.Count ?? 0) Saved</span>
+                </div>
+                <div class="card-body p-4">
+                    @if (isLoading)
+                    {
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    }
+                    else if (conditions?.Count > 0)
+                    {
+                        <div class="row g-3">
+                            @foreach (var condition in conditions)
+                            {
+                                <div class="col-md-6">
+                                    <div class="card h-100 border-0 shadow-sm rounded-3 bg-light">
+                                        <div class="card-body position-relative">
+                                            <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 m-2 border-0" title="Delete" @onclick="() => DeleteConditionAsync(condition.ConditionId)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            
+                                            <h6 class="fw-bold text-dark mb-1 pe-4">@condition.ConditionName</h6>
+                                            
+                                            @if (condition.DiagnosedDate.HasValue)
+                                            {
+                                                <p class="small text-muted mb-2">
+                                                    <i class="bi bi-calendar-event me-1"></i> Diagnosed: @condition.DiagnosedDate.Value.ToString("MMM dd, yyyy")
+                                                </p>
+                                            }
+                                            
+                                            @if (!string.IsNullOrWhiteSpace(condition.Notes))
+                                            {
+                                                <p class="small mb-0 mt-2 p-2 bg-white rounded border border-light">
+                                                    @condition.Notes
+                                                </p>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="bi bi-clipboard2-pulse text-muted display-4 opacity-25 mb-3"></i>
+                            <h5 class="text-muted">No health conditions logged.</h5>
+                            <p class="text-muted small">Use the form to add your medical history.</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly ConditionForm conditionForm = new();
+    private List<HealthConditionDto>? conditions;
+
+    private string? token;
+    private string? statusMessage;
+    private bool hasError;
+    private bool isLoading;
+    private bool isSaving;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+        await LoadConditionsAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadConditionsAsync(bool showLoading = true)
+    {
+        if (showLoading) isLoading = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                token = await JS.InvokeAsync<string?>("localStorage.getItem", "medialert_token");
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                ShowError("No patient token found. Please log in again.");
+                return;
+            }
+
+            using var http = CreateHttpClient();
+            var response = await http.GetAsync("api/v1/HealthProfile");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            conditions = await response.Content.ReadFromJsonAsync<List<HealthConditionDto>>(JsonOptions);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddConditionAsync()
+    {
+        isSaving = true;
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            var request = new CreateHealthConditionRequest
+            {
+                ConditionName = conditionForm.ConditionName,
+                DiagnosedDate = conditionForm.DiagnosedDate.HasValue ? DateOnly.FromDateTime(conditionForm.DiagnosedDate.Value) : null,
+                Notes = conditionForm.Notes
+            };
+
+            using var http = CreateHttpClient();
+            var response = await http.PostAsJsonAsync("api/v1/HealthProfile", request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Condition saved successfully.";
+            ResetForm();
+            await LoadConditionsAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteConditionAsync(Guid conditionId)
+    {
+        statusMessage = null;
+        hasError = false;
+
+        try
+        {
+            using var http = CreateHttpClient();
+            var response = await http.DeleteAsync($"api/v1/HealthProfile/{conditionId}");
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await ShowErrorAsync(response);
+                return;
+            }
+
+            statusMessage = "Condition deleted.";
+            await LoadConditionsAsync(showLoading: false);
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { BaseAddress = new Uri(Navigation.BaseUri) };
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+        return http;
+    }
+
+    private async Task ShowErrorAsync(HttpResponseMessage response)
+    {
+        ShowError($"Request failed with status {(int)response.StatusCode}.");
+    }
+
+    private void ShowError(string message)
+    {
+        hasError = true;
+        statusMessage = message;
+    }
+
+    private void ResetForm()
+    {
+        conditionForm.ConditionName = string.Empty;
+        conditionForm.DiagnosedDate = null;
+        conditionForm.Notes = string.Empty;
+    }
+
+    private sealed class ConditionForm
+    {
+        public string ConditionName { get; set; } = string.Empty;
+        public DateTime? DiagnosedDate { get; set; }
+        public string? Notes { get; set; }
+    }
+}
